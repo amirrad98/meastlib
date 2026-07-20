@@ -3,9 +3,12 @@ __pycache__/
 *.pyc
 data/items/
 data/models/
+data/admin/
 solr/lib/*.jar
 solr-data/
 .DS_Store
 .env
 benchmark/samples/
 benchmark/results/
+web/node_modules/
+web/dist/

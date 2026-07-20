@@ -1,0 +1,8 @@
+.git
+.venv
+data
+solr/lib
+web/dist
+web/node_modules
+**/__pycache__
+*.pyc

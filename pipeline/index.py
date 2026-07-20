@@ -51,7 +51,8 @@ def main() -> None:
         raise SystemExit(f"No ALTO files in {args.item}/ocr — run ocr.py first.")
 
     r = requests.post(f"{args.solr}/update?commit=true", json=docs, timeout=120)
-    r.raise_for_status()
+    if not r.ok:
+        raise SystemExit(f"Solr indexing failed ({r.status_code}): {r.text}")
     print(f"Indexed {len(docs)} pages of {item_id} into {args.solr}")
     print(f'Try: {args.solr}/select?q=ocr_text:YOUR_QUERY&hl=on&hl.ocr.fl=ocr_text')
 

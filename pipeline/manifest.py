@@ -4,7 +4,10 @@
 Image URLs point at Cantaloupe (IIIF Image API), which serves the access JPEGs.
 
 Usage:
-    python pipeline/manifest.py data/items/my-book [--base-url http://localhost:8182/iiif/3]
+    python pipeline/manifest.py data/items/my-book [--base-url /iiif/3]
+
+Image URLs are same-origin (/iiif/...) so the browser reaches Cantaloupe through
+the web proxy (nginx in production, Vite dev server in development).
 """
 import argparse
 import json
@@ -12,13 +15,13 @@ from pathlib import Path
 
 from PIL import Image
 
-PORTAL_BASE = "http://localhost:8080"
+PORTAL_BASE = ""  # same-origin ids; set to a full https URL when deployed publicly
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("item", type=Path)
-    ap.add_argument("--base-url", default="http://localhost:8182/iiif/3")
+    ap.add_argument("--base-url", default="/iiif/3")
     args = ap.parse_args()
 
     meta = json.loads((args.item / "metadata.json").read_text(encoding="utf-8"))

@@ -42,8 +42,9 @@ pip install -r pipeline/requirements.txt
 # 2. Fetch the Solr OCR highlighting plugin jar (one time)
 ./scripts/setup_solr_plugin.sh
 
-# 3. Start services (Solr :8983, Cantaloupe :8182, viewer :8080)
-docker compose up -d
+# 3. Build the React site, then start services (Solr :8983, Cantaloupe :8182, site :8080)
+cd web && npm install && npm run build && cd ..
+docker compose up -d --build
 
 # 4. Ingest a PDF or a folder of page images
 python pipeline/ingest.py path/to/book.pdf --id my-first-book --title "..." --lang ara
@@ -58,6 +59,40 @@ python pipeline/index.py data/items/my-first-book
 # 7. Open http://localhost:8080 and search
 ```
 
+### Administration dashboard
+
+Open `http://localhost:8080/admin` to upload PDF books and control processing
+without running pipeline commands by hand. The dashboard can:
+
+- analyze a selected PDF locally and suggest the title, creator, publication
+  date, language, item type, and permanent item ID;
+- ingest an uploaded PDF and its metadata;
+- run Arabic/Persian Tesseract OCR;
+- build or rebuild the IIIF viewer manifest;
+- index or reindex the book in Solr;
+- show persistent job status and logs, and cancel an active job;
+- report the health of OCR, Solr, IIIF, and local storage.
+
+Administration state is stored as JSON under `data/admin/`; no SQL service is
+required. Metadata analysis reads embedded PDF information and examines the
+first six pages. Image-only opening pages are OCRed locally (up to four pages),
+and the dashboard shows confidence and evidence so every suggestion can be
+reviewed before upload. No PDF content is sent to a cloud service. The dashboard
+has no authentication in this local version, so do not expose `/admin` or
+`/api` directly to the public internet.
+
+### Front-end development
+
+```bash
+cd web
+npm run dev        # hot-reloading dev server on http://localhost:5173
+```
+
+The dev server proxies `/solr`, `/iiif`, and `/data` to the docker services, so
+run `docker compose up -d` first. `npm run build` produces `web/dist`, which the
+`web` nginx container serves on :8080 (only Solr's `/select` endpoint is proxied
+through — the Solr admin UI is never exposed).
+
 ## First milestone: the OCR benchmark
 
 Before processing the whole collection, run `benchmark/` on ~20 representative pages (clean book, poor scan, newspaper column, typewritten document). It compares Kraken+OpenITI, Tesseract, and a VLM on character error rate and cost. **The winner determines the default engine for the collection.**
@@ -68,8 +103,7 @@ Before processing the whole collection, run `benchmark/` on ~20 representative p
 pipeline/     ingest -> ocr -> manifest -> index scripts
 benchmark/    OCR engine comparison harness (CER, cost, speed)
 solr/         Solr 9 configset with ocr-highlighting field types (Arabic/Persian analyzers)
-cantaloupe/   Cantaloupe IIIF image server config
-viewer/       Static search + TIFY reader page
+web/          React site (Vite): search + IIIF book reader, nginx config for production
 scripts/      Setup helpers
 data/         Items live here (gitignored) — layout contract in data/README.md
 docs/         Architecture decisions, roadmap, rights policy
