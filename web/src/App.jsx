@@ -2,6 +2,7 @@ import { Routes, Route, Link } from "react-router-dom";
 import SearchPage from "./pages/SearchPage.jsx";
 import ItemPage from "./pages/ItemPage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
+import { SERVICES_AVAILABLE } from "./api.js";
 
 export default function App() {
   return (
@@ -11,7 +12,7 @@ export default function App() {
         <span className="tagline">Middle East Digital Library</span>
         <nav className="topnav">
           <Link to="/">Search</Link>
-          <Link to="/admin">Admin</Link>
+          {SERVICES_AVAILABLE && <Link to="/admin">Admin</Link>}
         </nav>
       </header>
       <Routes>

@@ -1,4 +1,13 @@
-const SOLR = "/solr/meastlib/select";
+const SERVICE_URL = (import.meta.env.VITE_SERVICE_URL || "").replace(/\/+$/, "");
+
+export const IS_GITHUB_PAGES = import.meta.env.VITE_GITHUB_PAGES === "true";
+export const SERVICES_AVAILABLE = !IS_GITHUB_PAGES || Boolean(SERVICE_URL);
+
+function serviceUrl(path) {
+  return `${SERVICE_URL}${path}`;
+}
+
+const SOLR = serviceUrl("/solr/meastlib/select");
 
 export async function searchPages(query, { rows = 20, start = 0 } = {}) {
   const params = new URLSearchParams({
@@ -29,13 +38,13 @@ export async function searchPages(query, { rows = 20, start = 0 } = {}) {
 }
 
 export async function fetchManifest(itemId) {
-  const r = await fetch(`/data/items/${itemId}/iiif/manifest.json`);
+  const r = await fetch(serviceUrl(`/data/items/${itemId}/iiif/manifest.json`));
   if (!r.ok) throw new Error(`Manifest ${r.status}`);
   return r.json();
 }
 
 export async function fetchPageText(itemId, page) {
-  const r = await fetch(`/data/items/${itemId}/ocr/${page}.txt`);
+  const r = await fetch(serviceUrl(`/data/items/${itemId}/ocr/${page}.txt`));
   return r.ok ? r.text() : "";
 }
 
@@ -48,7 +57,7 @@ export function pageId(n) {
 }
 
 async function adminJson(url, options) {
-  const response = await fetch(url, options);
+  const response = await fetch(serviceUrl(url), options);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.detail || `Request failed (${response.status})`);

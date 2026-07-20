@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { searchPages, pageNumber } from "../api.js";
+import {
+  IS_GITHUB_PAGES,
+  SERVICES_AVAILABLE,
+  searchPages,
+  pageNumber,
+} from "../api.js";
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -28,15 +33,26 @@ export default function SearchPage() {
 
   return (
     <main className="search-page">
+      {IS_GITHUB_PAGES && !SERVICES_AVAILABLE && (
+        <section className="pages-notice">
+          <strong>Static project preview</strong>
+          <p>
+            GitHub Pages hosts this interface, while search, OCR, IIIF images,
+            and book administration run in the local Docker stack.
+          </p>
+          <a href="https://github.com/amirrad98/meastlib">View setup instructions on GitHub</a>
+        </section>
+      )}
       <form className="searchbar" onSubmit={run}>
         <input
           dir="auto"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search inside books — ابحث في الكتب — جستجو در کتاب‌ها"
+          disabled={!SERVICES_AVAILABLE}
           autoFocus
         />
-        <button type="submit" disabled={loading}>
+        <button type="submit" disabled={loading || !SERVICES_AVAILABLE}>
           {loading ? "…" : "Search"}
         </button>
       </form>
@@ -76,7 +92,7 @@ export default function SearchPage() {
         </>
       )}
 
-      {!results && !error && (
+      {!results && !error && SERVICES_AVAILABLE && (
         <p className="intro">
           Full-text search across digitized Arabic and Persian books,
           newspapers, and historical documents. Results link to the exact page.

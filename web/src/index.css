@@ -48,6 +48,16 @@ body {
 .searchbar button:disabled { opacity: 0.6; }
 .intro, .count { color: #666; margin-top: 20px; }
 .error { color: #a33; margin-top: 20px; }
+.pages-notice {
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  border: 1px solid #d8c8a9;
+  border-radius: 10px;
+  background: #fff8e9;
+  color: #654d2e;
+}
+.pages-notice p { margin: 6px 0 10px; line-height: 1.55; }
+.pages-notice a { color: #315f73; font-weight: 700; }
 
 .hits { list-style: none; padding: 0; margin: 20px 0; }
 .hit {

@@ -93,6 +93,21 @@ run `docker compose up -d` first. `npm run build` produces `web/dist`, which the
 `web` nginx container serves on :8080 (only Solr's `/select` endpoint is proxied
 through — the Solr admin UI is never exposed).
 
+### GitHub Pages
+
+The workflow in `.github/workflows/pages.yml` builds and deploys the React site
+to GitHub Pages after every push to `main`. It can also be started manually from
+the Actions tab. The build uses GitHub's detected Pages base path, so repository
+subpaths and custom domains work without editing the Vite configuration.
+
+GitHub Pages is static hosting: it cannot run the Python administration API,
+Tesseract, Solr, or Cantaloupe. Without a public backend, the deployed site is a
+clearly labeled project preview and does not expose the Admin route. To connect
+an independently hosted backend later, create an Actions repository variable
+named `MEASTLIB_SERVICE_URL` containing its origin, such as
+`https://library-api.example.org`. That service must expose `/api`, `/solr`, and
+`/data` with suitable CORS and authentication controls.
+
 ## First milestone: the OCR benchmark
 
 Before processing the whole collection, run `benchmark/` on ~20 representative pages (clean book, poor scan, newspaper column, typewritten document). It compares Kraken+OpenITI, Tesseract, and a VLM on character error rate and cost. **The winner determines the default engine for the collection.**
