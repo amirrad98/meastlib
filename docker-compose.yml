@@ -1,0 +1,36 @@
+services:
+  solr:
+    image: solr:9.10
+    ports:
+      - "8983:8983"
+    volumes:
+      - ./solr/lib:/opt/solr/contrib/ocrhighlighting:ro
+      - ./solr/configset:/opt/solr/server/solr/configsets/meastlib:ro
+      - ./data:/data:ro
+      - solr-data:/var/solr
+    command:
+      - solr-precreate
+      - meastlib
+      - /opt/solr/server/solr/configsets/meastlib
+
+  cantaloupe:
+    image: uclalibrary/cantaloupe:5.0.6-3
+    ports:
+      - "8182:8182"
+    environment:
+      CANTALOUPE_SOURCE_STATIC: FilesystemSource
+      CANTALOUPE_FILESYSTEMSOURCE_BASICLOOKUPSTRATEGY_PATH_PREFIX: /imageroot/items/
+      CANTALOUPE_ENDPOINT_IIIF_3_ENABLED: "true"
+    volumes:
+      - ./data:/imageroot:ro
+
+  viewer:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./viewer:/usr/share/nginx/html:ro
+      - ./data:/usr/share/nginx/html/data:ro
+
+volumes:
+  solr-data:

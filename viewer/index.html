@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>meastlib — Middle East Digital Library</title>
+<script src="https://cdn.jsdelivr.net/npm/tify@0.33.0/dist/tify.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tify@0.33.0/dist/tify.css">
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; }
+  header { padding: 12px 20px; border-bottom: 1px solid #ddd; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  #search { flex: 1; min-width: 240px; display: flex; gap: 8px; }
+  #q { flex: 1; padding: 8px 12px; font-size: 16px; border: 1px solid #bbb; border-radius: 6px; }
+  button { padding: 8px 16px; font-size: 15px; cursor: pointer; }
+  #results { padding: 16px 20px; max-width: 800px; }
+  .hit { border: 1px solid #e2e2e2; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px; cursor: pointer; }
+  .hit .meta { color: #666; font-size: 13px; margin-bottom: 4px; }
+  .hit .snippet { direction: rtl; text-align: right; font-size: 17px; line-height: 1.8; }
+  .hit em { background: #ffe9a8; font-style: normal; }
+  #tify { height: calc(100vh - 61px); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>meastlib</h1>
+  <form id="search">
+    <input id="q" dir="auto" placeholder="Search inside books — ابحث في الكتب" autocomplete="off">
+    <button type="submit">Search</button>
+    <button type="button" id="back" class="hidden">← Results</button>
+  </form>
+</header>
+<div id="results"></div>
+<div id="tify" class="hidden"></div>
+<script>
+const SOLR = "http://localhost:8983/solr/meastlib/select";
+const resultsEl = document.getElementById("results");
+const tifyEl = document.getElementById("tify");
+const backBtn = document.getElementById("back");
+let tify = null;
+
+document.getElementById("search").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = document.getElementById("q").value.trim();
+  if (!q) return;
+  showResults();
+  resultsEl.innerHTML = "Searching…";
+  const params = new URLSearchParams({
+    q: `ocr_text:(${q})`,
+    "hl": "on",
+    "hl.ocr.fl": "ocr_text",
+    "hl.snippets": "3",
+    rows: "20",
+    wt: "json",
+  });
+  try {
+    const r = await fetch(`${SOLR}?${params}`);
+    const data = await r.json();
+    render(data, q);
+  } catch (err) {
+    resultsEl.innerHTML = `<p>Search failed — is Solr running? (${err})</p>`;
+  }
+});
+
+function render(data, q) {
+  const docs = data.response?.docs || [];
+  const ocrHl = data.ocrHighlighting || {};
+  if (!docs.length) { resultsEl.innerHTML = "<p>No results.</p>"; return; }
+  resultsEl.innerHTML = "";
+  for (const doc of docs) {
+    const snips = (ocrHl[doc.id]?.ocr_text?.snippets || [])
+      .map(s => s.text).join(" … ");
+    const div = document.createElement("div");
+    div.className = "hit";
+    div.innerHTML = `<div class="meta">${doc.title || doc.item_id} — ${doc.page}</div>
+      <div class="snippet">${snips || "(match on this page)"}</div>`;
+    div.addEventListener("click", () => openPage(doc.item_id, doc.page));
+    resultsEl.appendChild(div);
+  }
+}
+
+function openPage(itemId, page) {
+  resultsEl.classList.add("hidden");
+  tifyEl.classList.remove("hidden");
+  backBtn.classList.remove("hidden");
+  const pageNum = parseInt(page.replace("page-", ""), 10) || 1;
+  if (tify) { tify.destroy(); tifyEl.innerHTML = ""; }
+  tify = new Tify({
+    container: "#tify",
+    manifestUrl: `data/items/${itemId}/iiif/manifest.json`,
+    pages: [pageNum],
+  });
+}
+
+function showResults() {
+  tifyEl.classList.add("hidden");
+  resultsEl.classList.remove("hidden");
+  backBtn.classList.add("hidden");
+}
+backBtn.addEventListener("click", showResults);
+</script>
+</body>
+</html>

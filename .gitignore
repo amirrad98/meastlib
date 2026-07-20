@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+data/items/
+data/models/
+solr/lib/*.jar
+solr-data/
+.DS_Store
+.env
+benchmark/samples/
+benchmark/results/

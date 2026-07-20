@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<config>
+  <luceneMatchVersion>9.10</luceneMatchVersion>
+
+  <lib dir="/opt/solr/contrib/ocrhighlighting" regex=".*\.jar"/>
+
+  <dataDir>${solr.data.dir:}</dataDir>
+  <directoryFactory name="DirectoryFactory" class="solr.NRTCachingDirectoryFactory"/>
+  <codecFactory class="solr.SchemaCodecFactory"/>
+  <schemaFactory class="ClassicIndexSchemaFactory"/>
+
+  <updateHandler class="solr.DirectUpdateHandler2">
+    <updateLog>
+      <str name="dir">${solr.ulog.dir:}</str>
+    </updateLog>
+    <autoCommit>
+      <maxTime>15000</maxTime>
+      <openSearcher>false</openSearcher>
+    </autoCommit>
+  </updateHandler>
+
+  <query>
+    <maxBooleanClauses>1024</maxBooleanClauses>
+    <filterCache size="512" initialSize="512" autowarmCount="0"/>
+    <queryResultCache size="512" initialSize="512" autowarmCount="0"/>
+    <documentCache size="512" initialSize="512" autowarmCount="0"/>
+    <queryResultWindowSize>20</queryResultWindowSize>
+    <useColdSearcher>false</useColdSearcher>
+  </query>
+
+  <requestDispatcher>
+    <httpCaching never304="true"/>
+  </requestDispatcher>
+
+  <searchComponent class="de.digitalcollections.solrocr.solr.OcrHighlightComponent"
+                   name="ocrHighlight"/>
+
+  <requestHandler name="/select" class="solr.SearchHandler">
+    <lst name="defaults">
+      <str name="echoParams">explicit</str>
+      <int name="rows">10</int>
+      <str name="df">ocr_text</str>
+    </lst>
+    <arr name="components">
+      <str>query</str>
+      <str>ocrHighlight</str>
+      <str>facet</str>
+      <str>mlt</str>
+      <str>highlight</str>
+      <str>stats</str>
+      <str>debug</str>
+    </arr>
+  </requestHandler>
+
+  <requestHandler name="/update" class="solr.UpdateRequestHandler"/>
+  <requestHandler name="/admin/ping" class="solr.PingRequestHandler">
+    <lst name="invariants">
+      <str name="q">*:*</str>
+    </lst>
+  </requestHandler>
+</config>

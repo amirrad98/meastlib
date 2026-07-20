@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<schema name="meastlib" version="1.6">
+
+  <field name="id" type="string" indexed="true" stored="true" required="true"/>
+  <field name="item_id" type="string" indexed="true" stored="true"/>
+  <field name="page" type="string" indexed="true" stored="true"/>
+  <field name="title" type="text_general" indexed="true" stored="true"/>
+  <field name="creator" type="text_general" indexed="true" stored="true"/>
+  <field name="date_published" type="string" indexed="true" stored="true"/>
+  <field name="language" type="string" indexed="true" stored="true"/>
+  <field name="type" type="string" indexed="true" stored="true"/>
+  <field name="public" type="boolean" indexed="true" stored="true"/>
+  <field name="ocr_text" type="text_ocr" indexed="true" stored="true"/>
+  <field name="_version_" type="plong" indexed="false" stored="false"/>
+
+  <uniqueKey>id</uniqueKey>
+
+  <fieldType name="string" class="solr.StrField" sortMissingLast="true"/>
+  <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true"/>
+  <fieldType name="plong" class="solr.LongPointField"/>
+
+  <fieldType name="text_general" class="solr.TextField" positionIncrementGap="100">
+    <analyzer>
+      <tokenizer class="solr.ICUTokenizerFactory"/>
+      <filter class="solr.ICUFoldingFilterFactory"/>
+    </analyzer>
+  </fieldType>
+
+  <!-- OCR field: content is a path to an ALTO file on disk (ExternalUtf8ContentFilter).
+       ICU tokenizer handles Arabic/Persian; Arabic normalization folds alef/yeh
+       variants so searches match across orthographic variation. -->
+  <fieldType name="text_ocr" class="solr.TextField"
+             storeOffsetsWithPositions="true" termVectors="true">
+    <analyzer>
+      <charFilter class="de.digitalcollections.solrocr.lucene.filters.ExternalUtf8ContentFilterFactory"/>
+      <charFilter class="de.digitalcollections.solrocr.lucene.filters.OcrCharFilterFactory"/>
+      <tokenizer class="solr.ICUTokenizerFactory"/>
+      <filter class="solr.ArabicNormalizationFilterFactory"/>
+      <filter class="solr.PersianNormalizationFilterFactory"/>
+      <filter class="solr.ICUFoldingFilterFactory"/>
+    </analyzer>
+  </fieldType>
+
+</schema>
