@@ -101,7 +101,7 @@ def main() -> None:
             if v and k in (
                 "creator", "contributors", "publisher", "place_published", "date_published",
                 "date_calendar", "edition", "series_title", "volume_label", "identifiers", "subjects",
-                "language", "type", "source", "rights",
+                "issue_number", "language", "type", "source", "rights",
             )
         ],
         "viewingDirection": "right-to-left",

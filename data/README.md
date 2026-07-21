@@ -52,6 +52,7 @@ preservation fields provide a fuller catalog record.
   "collection_id": "",
   "volume_number": null,
   "volume_label": "",
+  "issue_number": "",
   "identifiers": [{"scheme": "ISBN", "value": "", "scope": "volume | set"}],
   "subjects": [],
   "temporal_coverage": [],

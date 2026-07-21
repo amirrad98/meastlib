@@ -163,12 +163,34 @@ body {
 .catalog-card h3 { margin: 0; font-family: Georgia, "Noto Naskh Arabic", serif; font-size: 18px; font-weight: 600; line-height: 1.5; }
 .catalog-card h3 a { color: #202b2d; text-decoration: none; }
 .catalog-creator { margin: 6px 0 0; color: #657477; font-size: 13px; }
+.catalog-issue-date { margin: 5px 0 0; color: #4e6669; font-size: 14px; font-weight: 700; }
 .catalog-facts { display: flex; gap: 10px; margin: 8px 0 0; color: #8a9392; font-size: 11px; }
 .catalog-facts span + span::before { content: "·"; margin-inline-end: 10px; }
 .collection-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .collection-links a { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border: 1px solid #dedbd2; border-radius: 10px; background: #fff; color: #29484f; font-weight: 700; text-decoration: none; }
 .collection-links .collection-name { min-width: 0; padding: 0; background: transparent; color: inherit; font-size: inherit; text-align: start; }
 .collection-links a > span:not(.collection-name) { min-width: 27px; padding: 4px 8px; border-radius: 20px; background: #edf3ef; color: #63776d; font-size: 11px; text-align: center; }
+
+/* Newspaper archive */
+.newspaper-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, .85fr); gap: 48px; align-items: end; padding: 42px; border: 1px solid #d8d2c6; border-radius: 18px; background: linear-gradient(120deg, #f2eee4, #fbfaf6); }
+.newspaper-heading h1 { margin: 2px 0 12px; font-family: Georgia, "Noto Naskh Arabic", serif; font-size: clamp(42px, 7vw, 76px); font-weight: 500; line-height: 1; }
+.newspaper-heading > div > p:last-child { max-width: 610px; margin: 0; color: #657071; font-size: 16px; line-height: 1.7; }
+.newspaper-search { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px; border-radius: 12px; background: rgba(255,255,255,.82); box-shadow: 0 8px 24px rgba(52,55,47,.07); }
+.newspaper-search label { display: grid; gap: 6px; color: #7b7568; font-size: 10px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.newspaper-search input, .newspaper-search select { min-width: 0; width: 100%; padding: 10px; border: 1px solid #d4d0c7; border-radius: 6px; background: #fff; color: #273638; font: inherit; font-size: 12px; text-transform: none; }
+.publication-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 28px 0 44px; }
+.publication-strip a, .publication-strip > div { display: flex; align-items: center; justify-content: space-between; min-height: 78px; padding: 17px 19px; border: 1px solid #dbd7cf; border-radius: 10px; background: #fff; color: #25484e; text-decoration: none; }
+.publication-strip span { font-family: Georgia, "Noto Naskh Arabic", serif; font-size: 22px; font-weight: 650; }
+.publication-strip strong { color: #9c623c; font-size: 11px; text-transform: uppercase; }
+.newspaper-results-heading { display: flex; align-items: baseline; justify-content: space-between; margin: 32px 0 18px; border-bottom: 2px solid #313839; }
+.newspaper-results-heading h2 { margin: 0 0 10px; font-family: Georgia, "Noto Naskh Arabic", serif; font-size: 30px; font-weight: 500; }
+.newspaper-results-heading p { margin: 0 0 10px; color: #78807e; font-size: 12px; }
+.newspaper-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.newspaper-card .catalog-cover { aspect-ratio: 501 / 737; border-radius: 3px; filter: grayscale(1); box-shadow: 0 7px 18px rgba(32,35,34,.18); }
+.newspaper-card .catalog-card-body { padding-top: 11px; }
+.newspaper-card h3 { font-size: 21px; }
+.newspaper-item-hero .item-cover { aspect-ratio: 501 / 737; border-radius: 4px; filter: grayscale(1); }
+.issue-date { margin: 4px 0 0; color: #9a5a34; font-family: Georgia, "Noto Naskh Arabic", serif; font-size: clamp(22px, 3vw, 32px); font-weight: 650; }
 .page-heading { margin-bottom: 30px; }
 .page-heading h1 { margin: 0; font-family: Georgia, "Noto Naskh Arabic", serif; font-size: clamp(38px, 6vw, 64px); font-weight: 500; }
 .browse-layout, .search-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 34px; align-items: start; }
@@ -247,6 +269,8 @@ body {
   .browse-layout, .search-layout { grid-template-columns: 1fr; }
   .facet-panel { position: static; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .facet-panel h2, .facet-panel .text-button { grid-column: 1 / -1; }
+  .newspaper-heading { grid-template-columns: 1fr; gap: 28px; }
+  .newspaper-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 700px) {
@@ -257,6 +281,10 @@ body {
   .hero-search input { border-radius: 7px; }
   .catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 12px; }
   .collection-links { grid-template-columns: 1fr; }
+  .newspaper-heading { padding: 28px 20px; }
+  .newspaper-search { grid-template-columns: 1fr; }
+  .publication-strip { grid-template-columns: 1fr; }
+  .newspaper-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .facet-panel { grid-template-columns: 1fr 1fr; }
   .work-hit { grid-template-columns: 70px minmax(0, 1fr); gap: 12px; padding: 12px; }
   .item-hero { grid-template-columns: 110px minmax(0, 1fr); gap: 18px; align-items: start; }

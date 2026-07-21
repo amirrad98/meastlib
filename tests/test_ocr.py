@@ -23,6 +23,11 @@ class OcrTests(unittest.TestCase):
         second = page_signature("abc", 1, "ara", 300, "tesseract 5")
         self.assertNotEqual(first, second)
 
+    def test_newspaper_profile_has_distinct_signature(self):
+        default = page_signature("abc", 1, "fas", 300, "tesseract 5")
+        newspaper = page_signature("abc", 1, "fas", 300, "tesseract 5", "newspaper")
+        self.assertNotEqual(default, newspaper)
+
     def test_searchable_pdf_keeps_page_count_and_text(self):
         with tempfile.TemporaryDirectory() as directory:
             item = Path(directory)

@@ -54,6 +54,23 @@ VOLUME_WORDS = {
 PUBLISHER_AUTHORITIES = {
     "کتابسرا": "کتاب‌سرا",
 }
+PERSIAN_MONTHS = {
+    "فروردین": 1, "اردیبهشت": 2, "خرداد": 3, "تیر": 4,
+    "مرداد": 5, "شهریور": 6, "مهر": 7, "آبان": 8,
+    "آذر": 9, "دی": 10, "بهمن": 11, "اسفند": 12,
+}
+PERSIAN_MONTH_LABELS = {value: key for key, value in PERSIAN_MONTHS.items()}
+NEWSPAPER_TITLE_AUTHORITIES = {
+    "kayhan": "کیهان",
+    "keyhan": "کیهان",
+    "ettelaat": "اطلاعات",
+}
+NEWSPAPER_FILENAME_RE = re.compile(
+    r"^(?P<year>[0-9۰-۹٠-٩]{4})[-_](?P<month>[^-_]+)[-_](?P<day>[0-9۰-۹٠-٩]{1,2})"
+    r"__+(?P<publication>.+?)_?\((?P<issue>[0-9۰-۹٠-٩]+)\)"
+    r"(?:__+(?P<accession>[0-9۰-۹٠-٩]+))?$",
+    re.I,
+)
 
 
 def clean(value: str) -> str:
@@ -115,6 +132,38 @@ def filename_title(filename: str) -> str:
     stem = re.sub(r"^\s*\d{4,}[\s_-]+", "", stem)
     stem = stem.replace("_", " ").replace("-", " ")
     return clean_edge(re.sub(r"\s+", " ", stem))
+
+
+def parse_newspaper_filename(filename: str) -> dict[str, Any] | None:
+    """Parse the issue naming convention used by historical newspaper scans."""
+    match = NEWSPAPER_FILENAME_RE.match(Path(filename).stem)
+    if not match:
+        return None
+    year = int(ascii_digits(match.group("year")))
+    day = int(ascii_digits(match.group("day")))
+    raw_month = clean_edge(match.group("month").replace("_", " "))
+    month = PERSIAN_MONTHS.get(raw_month)
+    if not month or not 1 <= day <= 31:
+        return None
+    raw_publication = clean_edge(match.group("publication").replace("_", " "))
+    authority_key = re.sub(r"[^a-z0-9]+", "", raw_publication.casefold())
+    publication = NEWSPAPER_TITLE_AUTHORITIES.get(authority_key, raw_publication)
+    issue_number = ascii_digits(match.group("issue"))
+    accession_number = ascii_digits(match.group("accession") or "")
+    date_value = f"{year:04d}-{month:02d}-{day:02d}"
+    date_display = f"{day} {PERSIAN_MONTH_LABELS[month]} {year}"
+    slug = re.sub(r"[^a-z0-9]+", "-", authority_key).strip("-") or "newspaper"
+    return {
+        "publication_title": publication,
+        "alternative_title": raw_publication if raw_publication != publication else "",
+        "issue_number": issue_number,
+        "accession_number": accession_number,
+        "date_published": date_value,
+        "date_display": date_display,
+        "date_calendar": "solar-hijri",
+        "collection_id": f"newspaper-{slug}",
+        "suggested_id": f"{slug}-{date_value}-{issue_number}"[:80],
+    }
 
 
 def sha256(path: Path) -> str:
@@ -488,6 +537,7 @@ def analyze_pdf(pdf_path: Path, filename: str | None = None) -> dict[str, Any]:
     try:
         embedded = document.metadata or {}
         pages, lines, ocr_pages = extract_metadata_pages(document)
+        newspaper = parse_newspaper_filename(filename)
         combined = f"{filename_title(filename)}\n" + "\n".join(page["text"] for page in pages)
         title, title_confidence, title_evidence = find_title(embedded, filename, lines, pages)
         creator, creator_confidence, creator_evidence = find_creator(embedded, pages, filename)
@@ -501,7 +551,23 @@ def analyze_pdf(pdf_path: Path, filename: str | None = None) -> dict[str, Any]:
         subjects, subject_evidence = find_subjects(pages)
         coverage, coverage_evidence = find_temporal_coverage(pages)
         classification_text = clean(f"{filename_title(filename)}\n{title}").casefold()
-        if re.search(r"روزنامه|صحیفه|جریده|newspaper", classification_text):
+        if newspaper:
+            item_type, type_confidence = "newspaper", 0.98
+            title = f"{newspaper['publication_title']} — {newspaper['date_display']}"
+            title_confidence = 0.98
+            published = newspaper["date_published"]
+            calendar = newspaper["date_calendar"]
+            date_confidence = 0.99
+            volume_number = None
+            volume_label = ""
+            title_evidence = {
+                "field": "title", "source": "Newspaper issue filename", "text": Path(filename).stem
+            }
+            date_evidence = {
+                "field": "date_published", "source": "Newspaper issue filename",
+                "text": newspaper["date_display"],
+            }
+        elif re.search(r"روزنامه|صحیفه|جریده|newspaper", classification_text):
             item_type, type_confidence = "newspaper", 0.76
         elif document.page_count <= 4:
             item_type, type_confidence = "document", 0.55
@@ -536,29 +602,42 @@ def analyze_pdf(pdf_path: Path, filename: str | None = None) -> dict[str, Any]:
             warnings.append("Embedded creator metadata was ignored because the PDF title metadata was not trustworthy.")
 
         file_hash = sha256(pdf_path)
-        suggested_id = suggested_item_id(
+        suggested_id = newspaper["suggested_id"] if newspaper else suggested_item_id(
             title, published, pdf_path, language=language, item_type=item_type, volume_number=volume_number
         )
+        alternative_titles = []
+        if newspaper and newspaper["alternative_title"]:
+            alternative_titles.append(newspaper["alternative_title"])
+        newspaper_identifiers = []
+        if newspaper:
+            newspaper_identifiers.append({
+                "scheme": "issue-number", "value": newspaper["issue_number"], "scope": "issue"
+            })
+            if newspaper["accession_number"]:
+                newspaper_identifiers.append({
+                    "scheme": "source-accession", "value": newspaper["accession_number"], "scope": "issue"
+                })
         metadata_record = {
             "schema_version": 3,
             "id": suggested_id,
             "title": title,
             "title_original_script": title if contains_arabic_script(title) else "",
-            "alternative_titles": [],
+            "alternative_titles": alternative_titles,
             "creator": creator,
             "creators": ([{"name": creator, "role": "author"}] if creator else []),
             "contributors": contributors,
             "publisher": publisher,
             "place_published": place,
             "date_published": published,
-            "date_display": published,
+            "date_display": newspaper["date_display"] if newspaper else published,
             "date_calendar": calendar,
             "edition": edition,
-            "series_title": "",
-            "collection_id": "",
+            "series_title": newspaper["publication_title"] if newspaper else "",
+            "collection_id": newspaper["collection_id"] if newspaper else "",
             "volume_number": volume_number,
             "volume_label": volume_label,
-            "identifiers": identifiers,
+            "issue_number": newspaper["issue_number"] if newspaper else "",
+            "identifiers": newspaper_identifiers + identifiers,
             "subjects": subjects,
             "temporal_coverage": coverage,
             "language": language,

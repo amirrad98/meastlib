@@ -87,8 +87,12 @@ def source_checksum(item: Path, source_pdf: Path | None) -> str:
     return digest.hexdigest()
 
 
-def page_signature(source_hash: str, page_number: int, languages: str, dpi: int, version: str) -> str:
-    value = f"{source_hash}:{page_number}:{languages}:{dpi}:{version}:psm3+retry6:text-only-pdf:v2"
+def page_signature(
+    source_hash: str, page_number: int, languages: str, dpi: int, version: str,
+    document_profile: str = "default",
+) -> str:
+    retry_psm = 4 if document_profile == "newspaper" else 6
+    value = f"{source_hash}:{page_number}:{languages}:{dpi}:{version}:psm3+retry{retry_psm}:{document_profile}:text-only-pdf:v3"
     return hashlib.sha256(value.encode()).hexdigest()
 
 
@@ -191,6 +195,7 @@ def process_page(
     languages: str,
     dpi: int,
     signature: str,
+    document_profile: str = "default",
 ) -> dict[str, Any]:
     page_stem = f"page-{page_number:04d}"
     final = output_paths(item, page_stem)
@@ -212,7 +217,10 @@ def process_page(
             and primary["words"] >= MIN_WORDS_FOR_CONFIDENCE
             and (confidence is None or confidence < CONFIDENCE_RETRY_THRESHOLD)
         ):
-            retry = run_tesseract(rendered, work / "retry", languages, dpi, 6)
+            # PSM 4 preserves newspaper columns; PSM 6 is appropriate for a
+            # conventional single block but tends to interleave news columns.
+            retry_psm = 4 if document_profile == "newspaper" else 6
+            retry = run_tesseract(rendered, work / "retry", languages, dpi, retry_psm)
             attempts.append({key: value for key, value in retry.items() if key not in {"base", "alto", "text", "pdf"}})
             if (retry["confidence"] or 0) > (primary["confidence"] or 0):
                 chosen = retry
@@ -319,6 +327,11 @@ def main() -> None:
     args = parser.parse_args()
 
     item = args.item.resolve()
+    try:
+        item_metadata = json.loads((item / "metadata.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        item_metadata = {}
+    document_profile = "newspaper" if item_metadata.get("type") == "newspaper" else "default"
     access = item / "access"
     pages = sorted(access.glob("page-*.jpg"))
     if not pages:
@@ -351,6 +364,7 @@ def main() -> None:
         "script": "Arab",
         "dpi": args.dpi,
         "workers": max(1, args.workers),
+        "document_profile": document_profile,
         "source_sha256": source_hash,
         "pages_total": len(pages),
         "pages": records,
@@ -367,7 +381,7 @@ def main() -> None:
     skipped = 0
     for index, access_page in enumerate(pages, start=1):
         stem = f"page-{index:04d}"
-        signature = page_signature(source_hash, index, args.langs, args.dpi, version)
+        signature = page_signature(source_hash, index, args.langs, args.dpi, version, document_profile)
         if valid_existing_outputs(output_paths(item, stem), records.get(stem, {}), signature):
             skipped += 1
             print(f"PROGRESS {skipped}/{len(pages)} {stem} skipped", flush=True)
@@ -378,7 +392,8 @@ def main() -> None:
     with ThreadPoolExecutor(max_workers=max(1, args.workers), thread_name_prefix="ocr-page") as executor:
         futures = {
             executor.submit(
-                process_page, item, source_pdf, access_page, index, args.langs, args.dpi, signature
+                process_page, item, source_pdf, access_page, index, args.langs, args.dpi, signature,
+                document_profile,
             ): index
             for index, access_page, signature in pending
         }

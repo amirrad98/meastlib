@@ -10,5 +10,6 @@ export default function CollectionPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   useEffect(() => { fetchCollection(collectionId).then(setData).catch((e) => setError(e.message)); }, [collectionId]);
-  return <main className="public-page collection-page">{error ? <p className="error">{error}</p> : !data ? <p>{t("loading")}</p> : <><div className="page-heading"><p className="eyebrow">{t("featuredCollections")}</p><h1 dir="auto">{data.title}</h1><p>{data.items.length} {t("works")}</p></div><div className="catalog-grid">{data.items.map((item) => <CatalogCard item={item} key={item.id} />)}</div></>}</main>;
+  const isNewspaper = data?.items?.[0]?.type === "newspaper";
+  return <main className="public-page collection-page">{error ? <p className="error">{error}</p> : !data ? <p>{t("loading")}</p> : <><div className="page-heading"><p className="eyebrow">{t(isNewspaper ? "newspaperArchive" : "featuredCollections")}</p><h1 dir="auto">{data.title}</h1><p>{data.items.length} {t(isNewspaper ? "issues" : "works")}</p></div><div className={`catalog-grid ${isNewspaper ? "newspaper-grid" : ""}`}>{data.items.map((item) => <CatalogCard item={item} key={item.id} />)}</div></>}</main>;
 }

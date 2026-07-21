@@ -71,6 +71,7 @@ class MetadataPatch(BaseModel):
     collection_id: str | None = None
     volume_number: int | None = None
     volume_label: str | None = None
+    issue_number: str | None = None
     language: str | None = None
     item_type: str | None = None
     subjects: list[str] | None = None
@@ -110,6 +111,7 @@ def upgraded_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     value.setdefault("rights_reviewed_by", "")
     value.setdefault("date_display", value.get("date_published", ""))
     value.setdefault("cover_page", 1)
+    value.setdefault("issue_number", "")
     value["public"] = bool(
         value.get("rights") == "public-domain"
         and value.get("rights_basis")
@@ -164,6 +166,7 @@ def catalog_card(path: Path, metadata: dict[str, Any] | None = None) -> dict[str
         "collection_id": value.get("collection_id", ""),
         "volume_number": value.get("volume_number"),
         "volume_label": value.get("volume_label", ""),
+        "issue_number": value.get("issue_number", ""),
         "pages": value.get("pages", 0),
         "rights": value.get("rights", "unknown"),
         "public": bool(value.get("public")),
@@ -766,6 +769,7 @@ def catalog_items(
         haystack = " ".join(str(value) for value in [
             metadata.get("title", ""), metadata.get("title_original_script", ""),
             metadata.get("creator", ""), metadata.get("publisher", ""),
+            metadata.get("series_title", ""), metadata.get("issue_number", ""),
             *metadata.get("alternative_titles", []), *metadata.get("subjects", []),
         ]).casefold()
         if query and query not in haystack:
@@ -838,7 +842,10 @@ def catalog_item(item_id: str) -> dict[str, Any]:
                 candidate_metadata = load_item_metadata(candidate)
                 if candidate_metadata.get("collection_id") == collection_id and item_is_visible(candidate_metadata):
                     related.append(catalog_card(candidate, candidate_metadata))
-        related.sort(key=lambda item: (item.get("volume_number") is None, item.get("volume_number") or 0))
+        if metadata.get("type") == "newspaper":
+            related.sort(key=lambda item: str(item.get("date", "")), reverse=True)
+        else:
+            related.sort(key=lambda item: (item.get("volume_number") is None, item.get("volume_number") or 0))
     derivatives = {
         "manifest": f"/data/items/{item_id}/iiif/manifest.json" if (path / "iiif/manifest.json").exists() else "",
         "searchable_pdf": f"/data/items/{item_id}/derivatives/searchable.pdf" if (path / "derivatives/searchable.pdf").exists() else "",
@@ -877,7 +884,10 @@ def catalog_collection(collection_id: str) -> dict[str, Any]:
                 items.append(catalog_card(path, metadata))
     if not items:
         raise HTTPException(status_code=404, detail="Collection not found")
-    items.sort(key=lambda item: (item.get("volume_number") is None, item.get("volume_number") or 0))
+    if items[0].get("type") == "newspaper":
+        items.sort(key=lambda item: str(item.get("date", "")), reverse=True)
+    else:
+        items.sort(key=lambda item: (item.get("volume_number") is None, item.get("volume_number") or 0))
     return {"id": collection_id, "title": items[0].get("series_title") or items[0]["title"], "items": items}
 
 
@@ -1335,6 +1345,9 @@ async def upload_item(
     date_published: str = Form(""),
     language: str = Form("ara"),
     item_type: str = Form("book"),
+    series_title: str = Form(""),
+    collection_id: str = Form(""),
+    issue_number: str = Form(""),
     source_note: str = Form(""),
     rights: str = Form("unknown"),
     process_mode: str = Form("full"),
@@ -1394,6 +1407,12 @@ async def upload_item(
         language,
         "--type",
         item_type,
+        "--series-title",
+        series_title,
+        "--collection-id",
+        collection_id,
+        "--issue-number",
+        issue_number,
         "--source-note",
         source_note,
         "--rights",

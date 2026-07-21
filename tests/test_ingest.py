@@ -23,6 +23,9 @@ class IngestTests(unittest.TestCase):
                 pub_date="",
                 lang="fas",
                 type="book",
+                series_title="",
+                collection_id="",
+                issue_number="",
                 source_note="",
                 rights="unknown",
             )

@@ -201,6 +201,9 @@ export default function AdminPage() {
       date_published: result.date_published,
       language: result.language,
       item_type: result.item_type,
+      series_title: result.metadata?.series_title,
+      collection_id: result.metadata?.collection_id,
+      issue_number: result.metadata?.issue_number,
     };
     Object.entries(values).forEach(([name, value]) => {
       const field = form.elements.namedItem(name);
@@ -266,6 +269,7 @@ export default function AdminPage() {
       place_published: item.place_published || "", date_published: item.date_published || "",
       date_calendar: item.date_calendar || "", series_title: item.series_title || "",
       collection_id: item.collection_id || "", volume_number: item.volume_number ?? "",
+      issue_number: item.issue_number || "",
       cover_page: item.cover_page || 1, language: item.language || "fas", item_type: item.type || "book",
       rights: item.rights || "unknown", rights_basis: item.rights_basis || "",
       rights_reviewed_by: item.rights_reviewed_by || "local administrator", notes: item.notes || "",
@@ -394,7 +398,7 @@ export default function AdminPage() {
           <div className="section-heading">
             <div>
               <p className="step-number">01</p>
-              <h2>Add a book</h2>
+              <h2>Add an item</h2>
             </div>
             <span className="local-chip">PDF · up to 2 GB</span>
           </div>
@@ -447,6 +451,7 @@ export default function AdminPage() {
                     ["Date", analysis.date_published, analysis.confidence?.date_published],
                     ["Language", analysis.language, analysis.confidence?.language],
                     ["Type", analysis.item_type, analysis.confidence?.item_type],
+                    ["Issue", analysis.metadata?.issue_number, analysis.confidence?.item_type],
                     ["Item ID", analysis.suggested_id, 0.7],
                   ].map(([label, value, confidence]) => (
                     <div className="suggestion" key={label}>
@@ -483,6 +488,21 @@ export default function AdminPage() {
               <label>
                 Title
                 <input name="title" placeholder="Book title" required />
+              </label>
+            </div>
+
+            <div className="form-row three-fields newspaper-fields">
+              <label>
+                Publication / series
+                <input name="series_title" placeholder="کیهان" />
+              </label>
+              <label>
+                Collection ID
+                <input name="collection_id" placeholder="newspaper-kayhan" pattern="[a-z0-9][a-z0-9._-]*" />
+              </label>
+              <label>
+                Issue number
+                <input name="issue_number" placeholder="10632" />
               </label>
             </div>
 
@@ -552,7 +572,7 @@ export default function AdminPage() {
             <button className="primary-button" disabled={uploading}>
               {uploading ? "Uploading…" : "Upload and start processing"}
             </button>
-            <p className="form-note">Only mark a book public domain after checking its rights.</p>
+            <p className="form-note">For newspapers, keep one PDF per issue and use the same collection ID for the complete publication run. Only mark an item public domain after checking its rights.</p>
           </form>
         </section>
 
@@ -600,7 +620,8 @@ export default function AdminPage() {
         <form className="upload-form" onSubmit={saveMetadata}>
           <div className="form-row"><label>Title<input dir="auto" value={editValues.title} onChange={(e) => setEditValues({ ...editValues, title: e.target.value })} required /></label><label>Creator<input dir="auto" value={editValues.creator} onChange={(e) => setEditValues({ ...editValues, creator: e.target.value })} /></label></div>
           <div className="form-row three-fields"><label>Publisher<input dir="auto" value={editValues.publisher} onChange={(e) => setEditValues({ ...editValues, publisher: e.target.value })} /></label><label>Place published<input dir="auto" value={editValues.place_published} onChange={(e) => setEditValues({ ...editValues, place_published: e.target.value })} /></label><label>Publication date<input value={editValues.date_published} onChange={(e) => setEditValues({ ...editValues, date_published: e.target.value })} /></label></div>
-          <div className="form-row three-fields"><label>Series title<input dir="auto" value={editValues.series_title} onChange={(e) => setEditValues({ ...editValues, series_title: e.target.value })} /></label><label>Collection ID<input value={editValues.collection_id} onChange={(e) => setEditValues({ ...editValues, collection_id: e.target.value })} /></label><label>Volume number<input type="number" min="1" value={editValues.volume_number} onChange={(e) => setEditValues({ ...editValues, volume_number: e.target.value })} /></label></div>
+          <div className="form-row three-fields"><label>Publication / series<input dir="auto" value={editValues.series_title} onChange={(e) => setEditValues({ ...editValues, series_title: e.target.value })} /></label><label>Collection ID<input value={editValues.collection_id} onChange={(e) => setEditValues({ ...editValues, collection_id: e.target.value })} /></label><label>Issue number<input value={editValues.issue_number} onChange={(e) => setEditValues({ ...editValues, issue_number: e.target.value })} /></label></div>
+          <label>Volume number<input type="number" min="1" value={editValues.volume_number} onChange={(e) => setEditValues({ ...editValues, volume_number: e.target.value })} /></label>
           <div className="form-row three-fields"><label>Language<select value={editValues.language} onChange={(e) => setEditValues({ ...editValues, language: e.target.value })}><option value="ara">Arabic</option><option value="fas">Persian</option><option value="ota">Ottoman Turkish</option><option value="urd">Urdu</option></select></label><label>Type<select value={editValues.item_type} onChange={(e) => setEditValues({ ...editValues, item_type: e.target.value })}><option value="book">Book</option><option value="newspaper">Newspaper</option><option value="document">Document</option></select></label><label>Cover page<input type="number" min="1" value={editValues.cover_page} onChange={(e) => setEditValues({ ...editValues, cover_page: e.target.value })} /></label></div>
           <label>Subjects, one per line<textarea dir="auto" rows="4" value={editValues.subjects} onChange={(e) => setEditValues({ ...editValues, subjects: e.target.value })} /></label>
           <div className="rights-review"><div className="form-row"><label>Rights<select value={editValues.rights} onChange={(e) => setEditValues({ ...editValues, rights: e.target.value })}><option value="unknown">Unknown / private</option><option value="public-domain">Public domain</option><option value="in-copyright">In copyright</option></select></label><label>Reviewed by<input value={editValues.rights_reviewed_by} onChange={(e) => setEditValues({ ...editValues, rights_reviewed_by: e.target.value })} /></label></div><label>Rights basis<textarea rows="3" value={editValues.rights_basis} onChange={(e) => setEditValues({ ...editValues, rights_basis: e.target.value })} placeholder="Citation or reasoning supporting the determination" /></label><p>Public access is enabled only when “Public domain” has a recorded basis and review.</p></div>

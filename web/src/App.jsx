@@ -7,6 +7,7 @@ import CatalogItemPage from "./pages/CatalogItemPage.jsx";
 import CollectionPage from "./pages/CollectionPage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
 import CorrectionPage from "./pages/CorrectionPage.jsx";
+import NewspapersPage from "./pages/NewspapersPage.jsx";
 import { PUBLIC_PORTAL, SERVICES_AVAILABLE } from "./api.js";
 import { useI18n } from "./i18n.jsx";
 
@@ -22,6 +23,7 @@ export default function App() {
         <nav className="topnav">
           <Link to="/">{isAdmin ? "Home" : t("home")}</Link>
           <Link to="/browse">{isAdmin ? "Browse" : t("browse")}</Link>
+          <Link to="/newspapers">{isAdmin ? "Newspapers" : t("newspapers")}</Link>
           <Link to="/search">{isAdmin ? "Search" : t("search")}</Link>
           {SERVICES_AVAILABLE && !PUBLIC_PORTAL && <Link to="/admin">{isAdmin ? "Admin" : t("admin")}</Link>}
           {!isAdmin && <button className="locale-toggle" onClick={() => setLocale(locale === "en" ? "fa" : "en")} aria-label="Switch interface language">{locale === "en" ? "فارسی" : "English"}</button>}
@@ -30,6 +32,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/browse" element={<BrowsePage />} />
+        <Route path="/newspapers" element={<NewspapersPage />} />
         <Route path="/search" element={<SearchPage />} />
         {!PUBLIC_PORTAL && <Route path="/admin" element={<AdminPage />} />}
         {!PUBLIC_PORTAL && <Route path="/admin/correct/:itemId/:page" element={<CorrectionPage />} />}

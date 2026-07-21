@@ -17,6 +17,7 @@ from backend.metadata import (
     looks_like_garbage,
     normalize_publisher,
     filename_title,
+    parse_newspaper_filename,
     suggested_item_id,
 )
 
@@ -129,6 +130,19 @@ class MetadataTests(unittest.TestCase):
     def test_isbn_validation(self):
         self.assertTrue(isbn_checksum_valid("9780306406157"))
         self.assertFalse(isbn_checksum_valid("9789645840406"))
+
+    def test_parses_newspaper_issue_filename(self):
+        value = parse_newspaper_filename("1357-بهمن-18__Kayhan_(10632)__226603.pdf")
+        self.assertEqual(value["publication_title"], "کیهان")
+        self.assertEqual(value["date_published"], "1357-11-18")
+        self.assertEqual(value["date_display"], "18 بهمن 1357")
+        self.assertEqual(value["issue_number"], "10632")
+        self.assertEqual(value["accession_number"], "226603")
+        self.assertEqual(value["collection_id"], "newspaper-kayhan")
+        self.assertEqual(value["suggested_id"], "kayhan-1357-11-18-10632")
+
+    def test_ignores_ordinary_book_filename_as_newspaper(self):
+        self.assertIsNone(parse_newspaper_filename("87021-دموکراسی، خدای شکست خورده.pdf"))
 
 
 if __name__ == "__main__":

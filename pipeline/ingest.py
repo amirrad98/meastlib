@@ -92,6 +92,7 @@ def default_metadata(args: argparse.Namespace) -> dict[str, Any]:
         "collection_id": "",
         "volume_number": None,
         "volume_label": "",
+        "issue_number": args.issue_number,
         "identifiers": [],
         "subjects": [],
         "temporal_coverage": [],
@@ -111,9 +112,20 @@ def default_metadata(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def apply_newspaper_fields(metadata: dict[str, Any], args: argparse.Namespace) -> None:
+    if args.series_title:
+        metadata["series_title"] = args.series_title
+    if args.collection_id:
+        metadata["collection_id"] = args.collection_id
+    if args.issue_number:
+        metadata["issue_number"] = args.issue_number
+
+
 def load_metadata(args: argparse.Namespace) -> dict[str, Any]:
     if not args.metadata_file:
-        return default_metadata(args)
+        metadata = default_metadata(args)
+        apply_newspaper_fields(metadata, args)
+        return metadata
     try:
         metadata = json.loads(args.metadata_file.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -126,6 +138,8 @@ def load_metadata(args: argparse.Namespace) -> dict[str, Any]:
     metadata.setdefault("rights_reviewed_by", "")
     metadata.setdefault("date_display", metadata.get("date_published", ""))
     metadata.setdefault("cover_page", 1)
+    metadata.setdefault("issue_number", "")
+    apply_newspaper_fields(metadata, args)
     metadata["public"] = bool(
         metadata.get("rights") == "public-domain"
         and metadata.get("rights_basis")
@@ -204,6 +218,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--date", dest="pub_date", default="")
     parser.add_argument("--lang", default="ara")
     parser.add_argument("--type", default="book", choices=["book", "newspaper", "document"])
+    parser.add_argument("--series-title", default="", help="Publication or series title")
+    parser.add_argument("--collection-id", default="", help="Stable identifier grouping related issues or volumes")
+    parser.add_argument("--issue-number", default="", help="Printed newspaper issue number")
     parser.add_argument("--source-note", default="")
     parser.add_argument("--rights", default="unknown", choices=["public-domain", "unknown", "in-copyright"])
     return parser.parse_args()
