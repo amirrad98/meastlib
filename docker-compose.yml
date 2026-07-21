@@ -34,8 +34,14 @@ services:
     environment:
       SOLR_URL: http://solr:8983/solr/meastlib
       CANTALOUPE_URL: http://cantaloupe:8182/
+      INBOX_DIR: /inbox
+      OCR_WORKERS: ${OCR_WORKERS:-2}
+      MEASTLIB_SEARCH_VISIBILITY: ${MEASTLIB_SEARCH_VISIBILITY:-all}
+      MEASTLIB_CATALOG_EMAIL: ${MEASTLIB_CATALOG_EMAIL:-}
+      GOOGLE_BOOKS_API_KEY: ${GOOGLE_BOOKS_API_KEY:-}
     volumes:
       - ./data:/app/data
+      - ${MEASTLIB_INBOX_DIR:-./data/inbox}:/inbox:ro
     depends_on:
       - solr
       - cantaloupe

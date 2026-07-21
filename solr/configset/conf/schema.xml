@@ -2,14 +2,42 @@
 <schema name="meastlib" version="1.6">
 
   <field name="id" type="string" indexed="true" stored="true" required="true"/>
+  <field name="doc_type" type="string" indexed="true" stored="true"/>
   <field name="item_id" type="string" indexed="true" stored="true"/>
   <field name="page" type="string" indexed="true" stored="true"/>
   <field name="title" type="text_general" indexed="true" stored="true"/>
+  <field name="title_sort" type="string" indexed="true" stored="true"/>
+  <field name="title_original_script" type="text_general" indexed="true" stored="true"/>
+  <field name="alternative_titles" type="text_general" indexed="true" stored="true" multiValued="true"/>
   <field name="creator" type="text_general" indexed="true" stored="true"/>
+  <field name="creator_facet" type="string" indexed="true" stored="true"/>
+  <field name="creators" type="text_general" indexed="true" stored="true" multiValued="true"/>
+  <field name="contributors" type="text_general" indexed="true" stored="true" multiValued="true"/>
+  <field name="publisher" type="text_general" indexed="true" stored="true"/>
+  <field name="place_published" type="text_general" indexed="true" stored="true"/>
   <field name="date_published" type="string" indexed="true" stored="true"/>
+  <field name="date_sort" type="string" indexed="true" stored="true"/>
+  <field name="date_year" type="pint" indexed="true" stored="true"/>
+  <field name="date_calendar" type="string" indexed="true" stored="true"/>
+  <field name="edition" type="text_general" indexed="true" stored="true"/>
+  <field name="series_title" type="text_general" indexed="true" stored="true"/>
+  <field name="collection_id" type="string" indexed="true" stored="true"/>
+  <field name="volume_number" type="pint" indexed="true" stored="true"/>
+  <field name="identifiers" type="string" indexed="true" stored="true" multiValued="true"/>
+  <field name="subjects" type="text_general" indexed="true" stored="true" multiValued="true"/>
+  <field name="subjects_facet" type="string" indexed="true" stored="true" multiValued="true"/>
+  <field name="temporal_coverage" type="text_general" indexed="true" stored="true" multiValued="true"/>
   <field name="language" type="string" indexed="true" stored="true"/>
   <field name="type" type="string" indexed="true" stored="true"/>
+  <field name="rights" type="string" indexed="true" stored="true"/>
   <field name="public" type="boolean" indexed="true" stored="true"/>
+  <field name="processing_status" type="string" indexed="true" stored="true"/>
+  <field name="ocr_confidence" type="pfloat" indexed="true" stored="true"/>
+  <field name="title_display" type="string" indexed="false" stored="true"/>
+  <field name="creator_display" type="string" indexed="false" stored="true"/>
+  <field name="date_display" type="string" indexed="false" stored="true"/>
+  <field name="series_display" type="string" indexed="false" stored="true"/>
+  <field name="volume_display" type="string" indexed="false" stored="true"/>
   <field name="ocr_text" type="text_ocr" indexed="true" stored="true"/>
   <field name="_version_" type="plong" indexed="true" stored="true"/>
 
@@ -18,6 +46,8 @@
   <fieldType name="string" class="solr.StrField" sortMissingLast="true"/>
   <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true"/>
   <fieldType name="plong" class="solr.LongPointField"/>
+  <fieldType name="pint" class="solr.IntPointField"/>
+  <fieldType name="pfloat" class="solr.FloatPointField"/>
 
   <fieldType name="text_general" class="solr.TextField" positionIncrementGap="100">
     <analyzer>
@@ -31,9 +61,15 @@
        variants so searches match across orthographic variation. -->
   <fieldType name="text_ocr" class="solr.TextField"
              storeOffsetsWithPositions="true" termVectors="true">
-    <analyzer>
+    <analyzer type="index">
       <charFilter class="solrocr.ExternalUtf8ContentFilterFactory"/>
       <charFilter class="solrocr.OcrCharFilterFactory"/>
+      <tokenizer class="solr.ICUTokenizerFactory"/>
+      <filter class="solr.ArabicNormalizationFilterFactory"/>
+      <filter class="solr.PersianNormalizationFilterFactory"/>
+      <filter class="solr.ICUFoldingFilterFactory"/>
+    </analyzer>
+    <analyzer type="query">
       <tokenizer class="solr.ICUTokenizerFactory"/>
       <filter class="solr.ArabicNormalizationFilterFactory"/>
       <filter class="solr.PersianNormalizationFilterFactory"/>

@@ -4,6 +4,8 @@ __pycache__/
 data/items/
 data/models/
 data/admin/
+data/inbox/
+data/public/
 solr/lib/*.jar
 solr-data/
 .DS_Store
@@ -12,3 +14,6 @@ benchmark/samples/
 benchmark/results/
 web/node_modules/
 web/dist/
+web/test-results/
+web/playwright-report/
+tmp/

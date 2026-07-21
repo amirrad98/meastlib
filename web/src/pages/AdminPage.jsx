@@ -2,13 +2,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   cancelAdminJob,
+  cancelAdminBatch,
   clearFinishedAdminJobs,
+  createAdminBatch,
+  deleteAdminBatch,
   analyzeBookMetadata,
+  fetchAdminBatches,
+  fetchAdminFixity,
   fetchAdminItems,
   fetchAdminJobs,
+  fetchAdminQuality,
   fetchAdminTools,
   runItemAction,
+  resumeAdminBatch,
+  runAdminFixity,
+  scanAdminInbox,
   uploadBook,
+  updateAdminItem,
 } from "../api.js";
 
 const ACTIVE = new Set(["queued", "running", "canceling"]);
@@ -39,6 +49,12 @@ function formatTime(value) {
   }).format(new Date(value));
 }
 
+function formatBytes(value = 0) {
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
+  if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
 function confidenceLabel(value = 0) {
   if (value >= 0.8) return "High";
   if (value >= 0.55) return "Medium";
@@ -49,7 +65,14 @@ function confidenceLabel(value = 0) {
 export default function AdminPage() {
   const [items, setItems] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [batches, setBatches] = useState([]);
+  const [inbox, setInbox] = useState(null);
+  const [scanningInbox, setScanningInbox] = useState(false);
+  const [startingBatch, setStartingBatch] = useState(false);
+  const [removingBatchId, setRemovingBatchId] = useState("");
   const [tools, setTools] = useState(null);
+  const [quality, setQuality] = useState([]);
+  const [fixity, setFixity] = useState(null);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -58,15 +81,21 @@ export default function AdminPage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState(null);
+  const [editingItemId, setEditingItemId] = useState("");
+  const [editValues, setEditValues] = useState(null);
+  const [savingMetadata, setSavingMetadata] = useState(false);
   const uploadFormRef = useRef(null);
 
   const refresh = useCallback(async (includeTools = false) => {
     try {
-      const requests = [fetchAdminItems(), fetchAdminJobs()];
-      if (includeTools) requests.push(fetchAdminTools());
-      const [nextItems, nextJobs, nextTools] = await Promise.all(requests);
+      const requests = [fetchAdminItems(), fetchAdminJobs(), fetchAdminBatches()];
+      if (includeTools) requests.push(fetchAdminQuality(), fetchAdminFixity(), fetchAdminTools());
+      const [nextItems, nextJobs, nextBatches, nextQuality, nextFixity, nextTools] = await Promise.all(requests);
       setItems(nextItems);
       setJobs(nextJobs);
+      setBatches(nextBatches);
+      if (nextQuality) setQuality(nextQuality);
+      if (nextFixity) setFixity(nextFixity);
       if (nextTools) setTools(nextTools);
       setSelectedJobId((current) => current || nextJobs[0]?.id || "");
     } catch (err) {
@@ -76,14 +105,71 @@ export default function AdminPage() {
 
   useEffect(() => {
     refresh(true);
+    scanInbox();
     const timer = window.setInterval(() => refresh(false), 2500);
     return () => window.clearInterval(timer);
   }, [refresh]);
+
+  async function scanInbox() {
+    setScanningInbox(true);
+    setError("");
+    try {
+      setInbox(await scanAdminInbox());
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setScanningInbox(false);
+    }
+  }
+
+  async function startInboxBatch() {
+    const files = (inbox?.files || []).filter((file) => file.status !== "duplicate").map((file) => file.relative_path);
+    if (!files.length) return;
+    setStartingBatch(true);
+    setError("");
+    try {
+      await createAdminBatch(files, "full");
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setStartingBatch(false);
+    }
+  }
+
+  async function controlBatch(batchId, action) {
+    setError("");
+    try {
+      if (action === "resume") await resumeAdminBatch(batchId);
+      else await cancelAdminBatch(batchId);
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function removeBatch(batchId) {
+    const confirmed = window.confirm(
+      "Remove this failed batch from the history? This will not delete the source PDF or any library books.",
+    );
+    if (!confirmed) return;
+    setRemovingBatchId(batchId);
+    setError("");
+    try {
+      await deleteAdminBatch(batchId);
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRemovingBatchId("");
+    }
+  }
 
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === selectedJobId) || jobs[0],
     [jobs, selectedJobId],
   );
+  const hasActiveBatch = batches.some((batch) => ["queued", "running"].includes(batch.status));
 
   async function submitUpload(event) {
     event.preventDefault();
@@ -173,6 +259,38 @@ export default function AdminPage() {
     }
   }
 
+  function beginEdit(item) {
+    setEditingItemId(item.id);
+    setEditValues({
+      title: item.title || "", creator: item.creator || "", publisher: item.publisher || "",
+      place_published: item.place_published || "", date_published: item.date_published || "",
+      date_calendar: item.date_calendar || "", series_title: item.series_title || "",
+      collection_id: item.collection_id || "", volume_number: item.volume_number ?? "",
+      cover_page: item.cover_page || 1, language: item.language || "fas", item_type: item.type || "book",
+      rights: item.rights || "unknown", rights_basis: item.rights_basis || "",
+      rights_reviewed_by: item.rights_reviewed_by || "local administrator", notes: item.notes || "",
+      subjects: (item.subjects || []).join("\n"),
+    });
+  }
+
+  async function saveMetadata(event) {
+    event.preventDefault();
+    setSavingMetadata(true); setError("");
+    try {
+      const payload = { ...editValues, subjects: editValues.subjects.split("\n").map((value) => value.trim()).filter(Boolean) };
+      payload.volume_number = payload.volume_number === "" ? null : Number(payload.volume_number);
+      payload.cover_page = Number(payload.cover_page || 1);
+      await updateAdminItem(editingItemId, payload);
+      setEditingItemId(""); setEditValues(null);
+      await refresh();
+    } catch (err) { setError(err.message); } finally { setSavingMetadata(false); }
+  }
+
+  async function startFixity() {
+    setError("");
+    try { await runAdminFixity(); await refresh(); } catch (err) { setError(err.message); }
+  }
+
   return (
     <main className="admin-page">
       <section className="admin-heading">
@@ -185,6 +303,91 @@ export default function AdminPage() {
       </section>
 
       {error && <div className="admin-error">{error}</div>}
+
+      <section className="admin-card inbox-card">
+        <div className="section-heading">
+          <div>
+            <p className="step-number">Batch inbox</p>
+            <h2>Process a folder automatically</h2>
+            <p className="inbox-path">{inbox?.path || tools?.inbox?.path || "Checking the mounted inbox…"}</p>
+          </div>
+          <div className="inbox-actions">
+            <button className="secondary-button" onClick={scanInbox} disabled={scanningInbox}>
+              {scanningInbox ? "Scanning…" : "Scan folder"}
+            </button>
+            <button
+              className="primary-button"
+              onClick={startInboxBatch}
+              disabled={startingBatch || hasActiveBatch || !(inbox?.files || []).some((file) => file.status !== "duplicate")}
+            >
+              {startingBatch ? "Starting…" : "Process new PDFs"}
+            </button>
+          </div>
+        </div>
+
+        {!inbox?.ok ? (
+          <div className="empty-state">
+            {inbox?.error || "Mount a folder with MEASTLIB_INBOX_DIR, then rebuild the Admin service."}
+          </div>
+        ) : (
+          <div className="inbox-summary">
+            <div className="inbox-facts">
+              <span><strong>{inbox.files.length}</strong> PDFs</span>
+              <span><strong>{formatBytes(inbox.total_bytes)}</strong> total</span>
+              <span><strong>{inbox.files.filter((file) => file.status === "duplicate").length}</strong> duplicates</span>
+            </div>
+            <div className="inbox-files">
+              {inbox.files.slice(0, 12).map((file) => (
+                <div className="inbox-file" key={file.relative_path}>
+                  <div>
+                    <strong dir="auto">{file.relative_path}</strong>
+                    <small>{formatBytes(file.bytes)} · {file.sha256.slice(0, 12)}</small>
+                  </div>
+                  <StatusBadge status={file.status} />
+                </div>
+              ))}
+              {inbox.files.length > 12 && <small className="muted">And {inbox.files.length - 12} more files…</small>}
+            </div>
+          </div>
+        )}
+
+        {batches.slice(0, 3).map((batch) => {
+          const completed = batch.files.filter((file) => ["succeeded", "duplicate"].includes(file.status)).length;
+          const current = batch.files.find((file) => !["succeeded", "duplicate"].includes(file.status));
+          return (
+            <div className="batch-row" key={batch.id}>
+              <div className="batch-summary">
+                <StatusBadge status={batch.status} />
+                <div>
+                  <strong>{completed} / {batch.files.length} books complete</strong>
+                  <small>
+                    {current
+                      ? `${current.relative_path} · ${current.stage}${current.pages_total ? ` · ${current.pages_done}/${current.pages_total} pages` : ""}`
+                      : `Finished ${formatTime(batch.finished_at)}`}
+                  </small>
+                </div>
+              </div>
+              <div className="inbox-actions">
+                {["partial", "failed", "canceled"].includes(batch.status) && (
+                  <button className="secondary-button" onClick={() => controlBatch(batch.id, "resume")}>Resume</button>
+                )}
+                {["partial", "failed", "canceled"].includes(batch.status) && (
+                  <button
+                    className="danger-button"
+                    disabled={removingBatchId === batch.id}
+                    onClick={() => removeBatch(batch.id)}
+                  >
+                    {removingBatchId === batch.id ? "Removing…" : "Remove"}
+                  </button>
+                )}
+                {["queued", "running"].includes(batch.status) && (
+                  <button className="danger-button" onClick={() => controlBatch(batch.id, "cancel")}>Cancel</button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </section>
 
       <div className="admin-grid">
         <section className="admin-card upload-card">
@@ -214,7 +417,7 @@ export default function AdminPage() {
             <div className="metadata-analyzer">
               <div>
                 <strong>Automatic metadata</strong>
-                <p>Reads this PDF locally and OCRs up to four scanned opening pages. Nothing is sent to a cloud service.</p>
+                <p>Reads this PDF locally and OCRs sampled opening and closing bibliographic pages. Nothing is sent to a cloud service.</p>
               </div>
               <button
                 type="button"
@@ -372,6 +575,7 @@ export default function AdminPage() {
               <ToolStatus label="Solr search" value={tools.solr} />
               <ToolStatus label="IIIF images" value={tools.iiif} />
               <ToolStatus label="Library storage" value={tools.storage} detail={tools.storage?.path} />
+              <ToolStatus label="Batch inbox" value={tools.inbox} detail={tools.inbox?.path} />
               <ToolStatus label="Metadata analyzer" value={tools.metadata} detail={tools.metadata?.detail} />
             </div>
           )}
@@ -385,6 +589,25 @@ export default function AdminPage() {
           </div>
         </aside>
       </div>
+
+      <section className="admin-card quality-card">
+        <div className="section-heading"><div><p className="step-number">Review</p><h2>Quality & rights queue</h2><p className={`fixity-summary ${fixity?.ok === false ? "failed" : ""}`}>{fixity?.ok == null ? "Fixity has not been checked." : fixity.ok ? `Fixity verified for ${fixity.items?.length || 0} items.` : "Fixity failures require attention."}</p></div><div className="inbox-actions"><span className="item-count">{quality.length} item{quality.length === 1 ? "" : "s"}</span><button className="secondary-button" onClick={startFixity}>Run fixity audit</button></div></div>
+        {quality.length === 0 ? <div className="empty-state">No catalog, OCR, rights, or index exceptions.</div> : <div className="quality-list">{quality.slice(0, 20).map((entry) => <div className="quality-row" key={entry.item.id}><div><strong dir="auto">{entry.item.title}</strong><small>{entry.item.id}</small></div><div className="quality-issues">{entry.issues.map((issue) => <span key={issue}>{issue.replaceAll("-", " ")}</span>)}</div><div><small>{entry.low_pages.length ? `${entry.low_pages.length} low-confidence pages` : ""}</small><button className="secondary-button" onClick={() => beginEdit(entry.summary)}>Review metadata</button>{entry.low_pages[0] && <Link className="secondary-button" to={`/admin/correct/${entry.item.id}/${entry.low_pages[0].page}`}>Correct OCR</Link>}</div></div>)}</div>}
+      </section>
+
+      {editingItemId && editValues && <section className="admin-card metadata-editor">
+        <div className="section-heading"><div><p className="step-number">Catalog record</p><h2>Edit {editingItemId}</h2></div><button className="secondary-button" onClick={() => { setEditingItemId(""); setEditValues(null); }}>Close</button></div>
+        <form className="upload-form" onSubmit={saveMetadata}>
+          <div className="form-row"><label>Title<input dir="auto" value={editValues.title} onChange={(e) => setEditValues({ ...editValues, title: e.target.value })} required /></label><label>Creator<input dir="auto" value={editValues.creator} onChange={(e) => setEditValues({ ...editValues, creator: e.target.value })} /></label></div>
+          <div className="form-row three-fields"><label>Publisher<input dir="auto" value={editValues.publisher} onChange={(e) => setEditValues({ ...editValues, publisher: e.target.value })} /></label><label>Place published<input dir="auto" value={editValues.place_published} onChange={(e) => setEditValues({ ...editValues, place_published: e.target.value })} /></label><label>Publication date<input value={editValues.date_published} onChange={(e) => setEditValues({ ...editValues, date_published: e.target.value })} /></label></div>
+          <div className="form-row three-fields"><label>Series title<input dir="auto" value={editValues.series_title} onChange={(e) => setEditValues({ ...editValues, series_title: e.target.value })} /></label><label>Collection ID<input value={editValues.collection_id} onChange={(e) => setEditValues({ ...editValues, collection_id: e.target.value })} /></label><label>Volume number<input type="number" min="1" value={editValues.volume_number} onChange={(e) => setEditValues({ ...editValues, volume_number: e.target.value })} /></label></div>
+          <div className="form-row three-fields"><label>Language<select value={editValues.language} onChange={(e) => setEditValues({ ...editValues, language: e.target.value })}><option value="ara">Arabic</option><option value="fas">Persian</option><option value="ota">Ottoman Turkish</option><option value="urd">Urdu</option></select></label><label>Type<select value={editValues.item_type} onChange={(e) => setEditValues({ ...editValues, item_type: e.target.value })}><option value="book">Book</option><option value="newspaper">Newspaper</option><option value="document">Document</option></select></label><label>Cover page<input type="number" min="1" value={editValues.cover_page} onChange={(e) => setEditValues({ ...editValues, cover_page: e.target.value })} /></label></div>
+          <label>Subjects, one per line<textarea dir="auto" rows="4" value={editValues.subjects} onChange={(e) => setEditValues({ ...editValues, subjects: e.target.value })} /></label>
+          <div className="rights-review"><div className="form-row"><label>Rights<select value={editValues.rights} onChange={(e) => setEditValues({ ...editValues, rights: e.target.value })}><option value="unknown">Unknown / private</option><option value="public-domain">Public domain</option><option value="in-copyright">In copyright</option></select></label><label>Reviewed by<input value={editValues.rights_reviewed_by} onChange={(e) => setEditValues({ ...editValues, rights_reviewed_by: e.target.value })} /></label></div><label>Rights basis<textarea rows="3" value={editValues.rights_basis} onChange={(e) => setEditValues({ ...editValues, rights_basis: e.target.value })} placeholder="Citation or reasoning supporting the determination" /></label><p>Public access is enabled only when “Public domain” has a recorded basis and review.</p></div>
+          <label>Catalog notes<textarea rows="3" value={editValues.notes} onChange={(e) => setEditValues({ ...editValues, notes: e.target.value })} /></label>
+          <button className="primary-button" disabled={savingMetadata}>{savingMetadata ? "Saving…" : "Save and rebuild catalog outputs"}</button>
+        </form>
+      </section>}
 
       <section className="admin-card library-card">
         <div className="section-heading">
@@ -419,8 +642,12 @@ export default function AdminPage() {
                       <div className="progress-facts">
                         <span>{item.access_pages} pages</span>
                         <span className={item.ocr_pages ? "complete-fact" : ""}>{item.ocr_pages} OCR</span>
+                        {item.ocr_confidence != null && <span>{Math.round(item.ocr_confidence * 100)}% confidence</span>}
                         <span className={item.has_manifest ? "complete-fact" : ""}>
                           {item.has_manifest ? "Viewer ready" : "No viewer"}
+                        </span>
+                        <span className={item.searchable_pdf ? "complete-fact" : ""}>
+                          {item.searchable_pdf ? "PDF searchable" : "No searchable PDF"}
                         </span>
                         <span className={item.indexed_pages ? "complete-fact" : ""}>
                           {item.indexed_pages ?? "—"} indexed
@@ -431,6 +658,7 @@ export default function AdminPage() {
                     <td>
                       <div className="action-menu">
                         {item.has_manifest && <Link to={`/item/${item.id}/1`}>Open</Link>}
+                        <button disabled={actionItem === item.id} onClick={() => beginEdit(item)}>Edit</button>
                         <button disabled={actionItem === item.id} onClick={() => runAction(item.id, "ocr")}>OCR</button>
                         <button disabled={actionItem === item.id} onClick={() => runAction(item.id, "manifest")}>Viewer</button>
                         <button disabled={actionItem === item.id} onClick={() => runAction(item.id, "index")}>Index</button>

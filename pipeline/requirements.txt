@@ -2,6 +2,7 @@ pymupdf>=1.24
 Pillow>=10.0
 requests>=2.31
 lxml>=5.0
+pypdf>=5,<7
 # OCR engines — install the ones you use:
 # kraken            (pip install kraken ; then: kraken get 10.5281/zenodo.7050270 or OpenITI models)
 # pytesseract       (plus system tesseract with ara+fas traineddata)

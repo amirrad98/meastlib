@@ -1,0 +1,79 @@
+name: meastlib-public
+
+services:
+  public-solr:
+    image: solr:9.10
+    ports:
+      - "127.0.0.1:${MEASTLIB_PUBLIC_SOLR_PORT:-8984}:8983"
+    environment:
+      SOLR_MODULES: analysis-extras
+      SOLR_OPTS: -Dsolr.config.lib.enabled=true -Dsolr.allowPaths=/data
+    volumes:
+      - ./solr/lib:/opt/solr/contrib/ocrhighlighting:ro
+      - ./solr/configset:/opt/solr/server/solr/configsets/meastlib:ro
+      - ${MEASTLIB_PUBLIC_DATA_DIR:-./data/public}:/data:ro
+      - public-solr-data:/var/solr
+    command: [solr-precreate, meastlib, /opt/solr/server/solr/configsets/meastlib]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8983/solr/meastlib/admin/ping >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+
+  public-cantaloupe:
+    image: uclalibrary/cantaloupe:5.0.6-3
+    environment:
+      CANTALOUPE_SOURCE_STATIC: FilesystemSource
+      CANTALOUPE_FILESYSTEMSOURCE_BASICLOOKUPSTRATEGY_PATH_PREFIX: /imageroot/items/
+      CANTALOUPE_ENDPOINT_IIIF_3_ENABLED: "true"
+    volumes:
+      - ${MEASTLIB_PUBLIC_DATA_DIR:-./data/public}:/imageroot:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8182/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+
+  public-api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      SOLR_URL: http://public-solr:8983/solr/meastlib
+      CANTALOUPE_URL: http://public-cantaloupe:8182/
+      MEASTLIB_SEARCH_VISIBILITY: public
+    volumes:
+      - ${MEASTLIB_PUBLIC_DATA_DIR:-./data/public}:/app/data:ro
+    command: [uvicorn, backend.app:app, --host, 0.0.0.0, --port, "8000", --log-config, /app/backend/logging.public.json]
+    depends_on:
+      public-solr:
+        condition: service_healthy
+      public-cantaloupe:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  public-web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.public
+    ports:
+      - "${MEASTLIB_PUBLIC_PORT:-8081}:80"
+    volumes:
+      - ${MEASTLIB_PUBLIC_DATA_DIR:-./data/public}:/data:ro
+    depends_on:
+      public-api:
+        condition: service_healthy
+      public-cantaloupe:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  public-solr-data:

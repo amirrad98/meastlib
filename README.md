@@ -9,7 +9,7 @@ collected files (PDFs / scans)
         |
    pipeline/ingest.py      normalize into per-item folders, immutable originals, checksums
         |
-   pipeline/ocr.py         Kraken (OpenITI models) / Tesseract / VLM -> ALTO XML + text + provenance
+   pipeline/ocr.py         Tesseract -> ALTO XML + text + searchable-PDF layer + provenance
         |
    pipeline/manifest.py    IIIF Presentation v3 manifests
         |
@@ -49,8 +49,8 @@ docker compose up -d --build
 # 4. Ingest a PDF or a folder of page images
 python pipeline/ingest.py path/to/book.pdf --id my-first-book --title "..." --lang ara
 
-# 5. OCR it (see benchmark/ first to pick your engine)
-python pipeline/ocr.py data/items/my-first-book --engine kraken
+# 5. OCR it and create the searchable-PDF derivative
+python pipeline/ocr.py data/items/my-first-book --engine tesseract --langs ara --workers 2
 
 # 6. Build IIIF manifest + index into Solr
 python pipeline/manifest.py data/items/my-first-book
@@ -73,13 +73,118 @@ without running pipeline commands by hand. The dashboard can:
 - show persistent job status and logs, and cancel an active job;
 - report the health of OCR, Solr, IIIF, and local storage.
 
-Administration state is stored as JSON under `data/admin/`; no SQL service is
-required. Metadata analysis reads embedded PDF information and examines the
-first six pages. Image-only opening pages are OCRed locally (up to four pages),
-and the dashboard shows confidence and evidence so every suggestion can be
-reviewed before upload. No PDF content is sent to a cloud service. The dashboard
+### Automatic folder batches
+
+Set `MEASTLIB_INBOX_DIR` to a host folder containing PDFs, then rebuild and
+start the stack. The folder is mounted read-only; source files are never moved
+or modified.
+
+```bash
+cp .env.example .env
+# Edit MEASTLIB_INBOX_DIR in .env, then:
+docker compose up -d --build
+```
+
+Open `http://localhost:8080/admin`, scan the batch inbox, and choose **Process
+new PDFs**. The pipeline fingerprints every file, skips exact duplicates,
+extracts and enriches metadata, transactionally ingests the original, runs
+resumable OCR, creates a visually unchanged searchable PDF, builds IIIF, and
+indexes both the catalog record and searchable pages. Batch and per-page state
+survive service restarts. One failed book does not stop the rest of the folder.
+Only one folder batch runs at a time, preventing two jobs from racing to publish
+the same permanent item.
+
+Failed, partial, and canceled batch-history rows can be dismissed from the
+dashboard. Removing history never deletes inbox PDFs or completed library items.
+
+Metadata extraction examines the first twelve and last five pages, rejects
+common corrupt scanner metadata, understands Persian/Arabic bibliographic
+labels and digits, and records evidence/confidence in
+`metadata-provenance.json`. ISBN lookups use Open Library and optionally Google
+Books when `GOOGLE_BOOKS_API_KEY` is configured. No page image is sent to a
+catalog service. A final collection-authority pass groups known title variants,
+normalizes conservative publisher aliases, and lets a low-confidence volume
+reuse a stronger creator/name form from another volume in the same set. Rights
+always default to `unknown` and private.
+
+Administration and batch state is stored as JSON under `data/admin/`; no SQL service is
+required. Metadata analysis reads embedded PDF information and samples opening
+and closing bibliographic pages with local OCR. The dashboard shows confidence
+and evidence for manual uploads, while folder batches continue automatically.
+No PDF content is sent to a cloud service. The dashboard
 has no authentication in this local version, so do not expose `/admin` or
 `/api` directly to the public internet.
+
+### Reader-facing library
+
+The local site now includes an English/Persian public interface:
+
+- `/` presents recently added books and featured multi-volume collections;
+- `/browse` filters catalog records by language, type, collection, creator, and subject;
+- `/search` groups full-text page hits by work, preserves searches in the URL, and exposes facets;
+- `/item/<id>` is a catalog record, while `/item/<id>/<page>` is the scan reader;
+- search links retain OCR coordinates so the reader can zoom to and highlight the matching words;
+- the reader includes in-book search, matching-page navigation, a windowed thumbnail strip, page jump,
+  citations, OCR text, ALTO, IIIF, and searchable-PDF links.
+
+The language switch changes public navigation between English and Persian. Administration remains English.
+
+### Metadata review, OCR correction, and fixity
+
+Metadata schema v3 makes public access depend on a recorded public-domain basis and review date. Existing
+v2 records can be inspected and migrated idempotently:
+
+```bash
+python pipeline/migrate_metadata.py --dry-run
+python pipeline/migrate_metadata.py
+```
+
+The Admin quality queue groups rights, metadata, low-confidence OCR, failed-page, page-count, and index
+exceptions. Its word editor writes versioned correction overlays and corrected ALTO/text derivatives while
+leaving the original OCR untouched. Run a checksum audit from the dashboard or command line:
+
+```bash
+python pipeline/fixity.py data/items --json data/admin/fixity.json
+```
+
+The current Solr schema remains usable without rebuilding. To enable the new creator/subject facets and true
+title/date sorting on an existing disposable Solr index, recreate its Docker volume and reindex derived data:
+
+```bash
+docker compose down
+docker volume rm meastlib_solr-data
+docker compose up -d solr
+python scripts/migrate_solr_schema.py --reindex
+docker compose up -d
+```
+
+Never remove `data/items`; Solr contains only a rebuildable index.
+
+### Public-domain-only publication
+
+The public stack is deliberately separate from administration. It mounts only an atomic export containing
+reviewed public-domain access images, OCR, manifests, and derivatives; originals and restricted items are absent.
+
+```bash
+# 1. Start the separate public search core.
+docker compose -f docker-compose.public.yml up -d public-solr
+
+# 2. Build the rights-filtered export and index it.
+python pipeline/publish.py \
+  --output data/public/items \
+  --portal-base https://library.example.org \
+  --solr http://localhost:8984/solr/meastlib
+
+# 3. Start the read-only portal on localhost:8081.
+docker compose -f docker-compose.public.yml up -d --build
+
+# 4. Prove a known restricted identifier cannot be retrieved directly.
+python scripts/test_public_boundary.py http://localhost:8081 <restricted-item-id>
+```
+
+Place TLS termination (for example Caddy, nginx, or a managed load balancer) in front of port 8081. The public
+nginx configuration proxies only read-only health, catalog, search, IIIF Content Search, image, and data routes;
+admin and mutation routes return 404. See `docs/OPERATIONS.md` before exposing it to the internet.
 
 ### Front-end development
 
@@ -111,6 +216,21 @@ named `MEASTLIB_SERVICE_URL` containing its origin, such as
 ## First milestone: the OCR benchmark
 
 Before processing the whole collection, run `benchmark/` on ~20 representative pages (clean book, poor scan, newspaper column, typewritten document). It compares Kraken+OpenITI, Tesseract, and a VLM on character error rate and cost. **The winner determines the default engine for the collection.**
+
+## Verification
+
+```bash
+docker compose run --rm -T --no-deps \
+  -v "$PWD/tests:/app/tests:ro" admin-api \
+  python -m unittest discover -s tests -v
+
+cd web
+npm run build
+npm test
+
+# Optional populated-corpus browser checks
+MEASTLIB_E2E_ITEM_ID=<item-id> MEASTLIB_E2E_QUERY=<query> npm run test:e2e
+```
 
 ## Repository layout
 
