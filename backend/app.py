@@ -22,10 +22,15 @@ from typing import Any
 
 import requests
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from backend.metadata import analyze_pdf
+from backend.catalog_index import (
+    authors_from_metadata,
+    build_catalog_dataset,
+    publisher_from_metadata,
+)
 
 
 ROOT = Path("/app")
@@ -157,6 +162,9 @@ def catalog_card(path: Path, metadata: dict[str, Any] | None = None) -> dict[str
         "title": value.get("title") or path.name,
         "title_original_script": value.get("title_original_script", ""),
         "creator": value.get("creator", ""),
+        "authors": authors_from_metadata(value),
+        "publisher": value.get("publisher", ""),
+        "publisher_authority": publisher_from_metadata(value),
         "date": value.get("date_display") or value.get("date_published", ""),
         "date_calendar": value.get("date_calendar", ""),
         "language": value.get("language", ""),
@@ -174,6 +182,17 @@ def catalog_card(path: Path, metadata: dict[str, Any] | None = None) -> dict[str
         "ingested": value.get("ingested", ""),
         "thumbnail": cover_url(value),
     }
+
+
+def visible_catalog_records() -> list[tuple[Path, dict[str, Any]]]:
+    """Load every visible item once for corpus-level catalog operations."""
+    records = []
+    for path in ITEMS_DIR.iterdir() if ITEMS_DIR.exists() else []:
+        if path.is_dir() and not path.name.startswith("."):
+            metadata = load_item_metadata(path)
+            if item_is_visible(metadata):
+                records.append((path, metadata))
+    return records
 
 
 def solr_facet(values: list[Any]) -> list[dict[str, Any]]:
@@ -753,6 +772,7 @@ def catalog_items(
     item_type: str = "",
     collection: str = "",
     creator: str = "",
+    publisher: str = "",
     subject: str = "",
     date_from: str = "",
     date_to: str = "",
@@ -776,15 +796,19 @@ def catalog_items(
             continue
         values.append((path, metadata))
 
-    facet_source = [metadata for _, metadata in values]
     if language:
         values = [entry for entry in values if entry[1].get("language") == language]
     if item_type:
         values = [entry for entry in values if entry[1].get("type") == item_type]
+    # Type is a structural boundary (book, issue, document), so its selected
+    # catalog should not advertise collections from the other object types.
+    facet_source = [metadata for _, metadata in values]
     if collection:
         values = [entry for entry in values if entry[1].get("collection_id") == collection]
     if creator:
-        values = [entry for entry in values if entry[1].get("creator") == creator]
+        values = [entry for entry in values if any(author["name"] == creator for author in authors_from_metadata(entry[1]))]
+    if publisher:
+        values = [entry for entry in values if entry[1].get("publisher") == publisher]
     if subject:
         values = [entry for entry in values if subject in entry[1].get("subjects", [])]
     if date_from:
@@ -802,7 +826,10 @@ def catalog_items(
     def facet(field: str, many: bool = False) -> list[dict[str, Any]]:
         counts: dict[str, int] = {}
         for metadata in facet_source:
-            raw = metadata.get(field, []) if many else [metadata.get(field, "")]
+            if field == "creator":
+                raw = [author["name"] for author in authors_from_metadata(metadata)]
+            else:
+                raw = metadata.get(field, []) if many else [metadata.get(field, "")]
             for value in raw or []:
                 if value:
                     counts[str(value)] = counts.get(str(value), 0) + 1
@@ -825,9 +852,66 @@ def catalog_items(
         "facets": {
             "language": facet("language"), "type": facet("type"),
             "collection": collection_facets, "creator": facet("creator"),
-            "subject": facet("subjects", many=True),
+            "publisher": facet("publisher"), "subject": facet("subjects", many=True),
         },
     }
+
+
+@app.get("/api/catalog/archive")
+def catalog_archive() -> dict[str, Any]:
+    """Return corpus totals plus complete author, publisher, and collection indexes."""
+    dataset = build_catalog_dataset(
+        (metadata for _, metadata in visible_catalog_records()),
+        scope="public" if SEARCH_VISIBILITY == "public" else "local",
+    )
+    return {
+        "generated_at": dataset["generated_at"],
+        "scope": dataset["scope"],
+        "summary": dataset["summary"],
+        "authors": dataset["authorities"]["authors"],
+        "publishers": dataset["authorities"]["publishers"],
+        "collections": dataset["collections"],
+        "dataset_url": "/api/catalog/dataset",
+    }
+
+
+@app.get("/api/catalog/dataset")
+def catalog_dataset() -> JSONResponse:
+    """Download all visible metadata and cross-references as portable JSON."""
+    dataset = build_catalog_dataset(
+        (metadata for _, metadata in visible_catalog_records()),
+        scope="public" if SEARCH_VISIBILITY == "public" else "local",
+    )
+    return JSONResponse(
+        dataset,
+        headers={"Content-Disposition": 'attachment; filename="meastlib-catalog.json"'},
+    )
+
+
+def catalog_authority(kind: str, identifier: str) -> dict[str, Any]:
+    matches = []
+    authority = None
+    for path, metadata in visible_catalog_records():
+        values = authors_from_metadata(metadata) if kind == "author" else [publisher_from_metadata(metadata)]
+        for value in (entry for entry in values if entry):
+            if value["id"] == identifier:
+                authority = value
+                matches.append(catalog_card(path, metadata))
+                break
+    if not authority:
+        raise HTTPException(status_code=404, detail=f"{kind.title()} not found")
+    matches.sort(key=lambda item: (str(item.get("date", "")), str(item.get("title", "")).casefold()))
+    return {**authority, "work_count": len(matches), "items": matches}
+
+
+@app.get("/api/catalog/authors/{identifier}")
+def catalog_author(identifier: str) -> dict[str, Any]:
+    return catalog_authority("author", identifier)
+
+
+@app.get("/api/catalog/publishers/{identifier}")
+def catalog_publisher(identifier: str) -> dict[str, Any]:
+    return catalog_authority("publisher", identifier)
 
 
 @app.get("/api/catalog/items/{item_id}")
@@ -852,7 +936,14 @@ def catalog_item(item_id: str) -> dict[str, Any]:
         "alto_template": f"/api/catalog/items/{item_id}/ocr/{{page}}?format=alto",
         "text_template": f"/api/catalog/items/{item_id}/ocr/{{page}}?format=text",
     }
-    return {**metadata, "thumbnail": cover_url(metadata, 600), "related_items": related, "derivatives": derivatives}
+    return {
+        **metadata,
+        "authors": authors_from_metadata(metadata),
+        "publisher_authority": publisher_from_metadata(metadata),
+        "thumbnail": cover_url(metadata, 600),
+        "related_items": related,
+        "derivatives": derivatives,
+    }
 
 
 @app.get("/api/catalog/items/{item_id}/ocr/{page}")
@@ -902,6 +993,7 @@ def search(
     item_type: str = "",
     collection: str = "",
     creator: str = "",
+    publisher: str = "",
     subject: str = "",
     date_from: int | None = None,
     date_to: int | None = None,
@@ -944,6 +1036,8 @@ def search(
     ]
     if "creator_facet" in available_fields:
         params.append(("facet.field", "creator_facet"))
+    if "publisher_facet" in available_fields:
+        params.append(("facet.field", "publisher_facet"))
     if "subjects_facet" in available_fields:
         params.append(("facet.field", "subjects_facet"))
     filters = []
@@ -956,6 +1050,7 @@ def search(
     for field, value in (
         ("language", language), ("type", item_type), ("collection_id", collection),
         (("creator_facet" if "creator_facet" in available_fields else "creator"), creator),
+        (("publisher_facet" if "publisher_facet" in available_fields else "publisher"), publisher),
         (("subjects_facet" if "subjects_facet" in available_fields else "subjects"), subject),
     ):
         if value:
@@ -1002,10 +1097,15 @@ def search(
                 **safe_ocr_highlighting(ocr),
             })
         item_id = representative.get("item_id") or group.get("groupValue")
+        creator_name = representative.get("creator_display") or representative.get("creator") or (creators[0] if creators else "")
+        publisher_name = representative.get("publisher", "")
         hits.append({
             "item_id": item_id,
             "title": representative.get("title_display") or representative.get("title") or item_id,
-            "creator": representative.get("creator_display") or representative.get("creator") or (creators[0] if creators else ""),
+            "creator": creator_name,
+            "authors": authors_from_metadata({"creators": creators, "creator": creator_name}),
+            "publisher": publisher_name,
+            "publisher_authority": publisher_from_metadata({"publisher": publisher_name}),
             "date": representative.get("date_display") or representative.get("date_published", ""),
             "language": representative.get("language", ""), "type": representative.get("type", ""),
             "series_title": representative.get("series_display") or representative.get("series_title", ""),
@@ -1025,6 +1125,7 @@ def search(
             "type": solr_facet(fields.get("type", [])),
             "collection": solr_facet(fields.get("collection_id", [])),
             "creator": solr_facet(fields.get("creator_facet", [])),
+            "publisher": solr_facet(fields.get("publisher_facet", [])),
             "subject": solr_facet(fields.get("subjects_facet", [])),
         },
     }

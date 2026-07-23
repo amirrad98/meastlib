@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { SERVICES_AVAILABLE, searchPages, pageNumber } from "../api.js";
 import { useI18n } from "../i18n.jsx";
+import { AuthorLinks, PublisherLink } from "../components/AuthorityLinks.jsx";
 
-const FACETS = [["language", "language"], ["item_type", "type"], ["collection", "collection"], ["creator", "creator"], ["subject", "subject"]];
+const FACETS = [["language", "language"], ["item_type", "type"], ["collection", "collection"], ["creator", "creator"], ["publisher", "publisher"], ["subject", "subject"]];
 
 export default function SearchPage() {
   const { t } = useI18n();
@@ -62,7 +63,8 @@ export default function SearchPage() {
             <Link className="work-hit-cover" to={`/item/${hit.item_id}`}><img src={hit.thumbnail} alt="" loading="lazy" /></Link>
             <div className="work-hit-content">
               <h2 dir="auto"><Link to={`/item/${hit.item_id}`}>{hit.title}</Link></h2>
-              <p className="hit-meta" dir="auto">{[hit.creator, hit.date, hit.volume_number ? `vol. ${hit.volume_number}` : ""].filter(Boolean).join(" · ")}</p>
+              <p className="hit-meta">{(hit.authors?.length || hit.creator) && <AuthorLinks authors={hit.authors} fallback={hit.creator} />}{(hit.authors?.length || hit.creator) && hit.date && " · "}{hit.date && <span dir="auto">{hit.date}</span>}{(hit.authors?.length || hit.creator || hit.date) && hit.volume_number && " · "}{hit.volume_number && <>vol. {hit.volume_number}</>}</p>
+              {(hit.publisher_authority || hit.publisher) && <p className="hit-publisher"><PublisherLink publisher={hit.publisher_authority} fallback={hit.publisher} /></p>}
               <p className="match-summary">{hit.catalog_match && t("catalog")}{hit.catalog_match && hit.page_hit_count ? " · " : ""}{hit.page_hit_count ? `${hit.page_hit_count} ${t("matchingPages")}` : ""}</p>
               <div className="page-hits">{hit.page_hits.map((pageHit) => <Link className="page-hit" key={pageHit.id} to={`/item/${hit.item_id}/${pageNumber(pageHit.page)}?q=${encodeURIComponent(queryParam)}`}><strong>{t("page")} {pageNumber(pageHit.page)}</strong>{pageHit.snippets.map((snippet, index) => <p dir="auto" key={index} dangerouslySetInnerHTML={{ __html: snippet.text }} />)}</Link>)}</div>
             </div>

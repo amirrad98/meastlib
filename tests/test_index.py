@@ -18,7 +18,13 @@ class IndexTests(unittest.TestCase):
         self.assertEqual(document["alternative_titles"], ["خاطرات علم"])
         self.assertEqual(document["creator"], "اسدالله علم")
         self.assertEqual(document["place_published"], "تهران")
+        self.assertEqual(document["publisher_facet"], "")
         self.assertEqual(document["temporal_coverage"], ["1352-1353"])
+
+    def test_publisher_is_available_as_an_exact_facet(self):
+        document = item_document({"id": "book-1", "publisher": "انتشارات مثال"})
+        self.assertEqual(document["publisher"], "انتشارات مثال")
+        self.assertEqual(document["publisher_facet"], "انتشارات مثال")
 
     def test_identifiers_are_searchable_with_or_without_scheme(self):
         self.assertEqual(

@@ -14,6 +14,7 @@ import requests
 FIELDS = [
     {"name": "title_sort", "type": "string", "indexed": True, "stored": True},
     {"name": "creator_facet", "type": "string", "indexed": True, "stored": True},
+    {"name": "publisher_facet", "type": "string", "indexed": True, "stored": True},
     {"name": "date_sort", "type": "string", "indexed": True, "stored": True},
     {"name": "date_year", "type": "pint", "indexed": True, "stored": True},
     {"name": "subjects_facet", "type": "string", "indexed": True, "stored": True, "multiValued": True},

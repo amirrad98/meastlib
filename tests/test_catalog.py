@@ -8,7 +8,8 @@ import fitz
 from PIL import Image
 
 from backend import app as app_module
-from backend.app import catalog_items, correct_ocr_words, safe_ocr_highlighting, upgraded_metadata
+from backend.app import catalog_archive, catalog_authority, catalog_items, correct_ocr_words, safe_ocr_highlighting, upgraded_metadata
+from backend.catalog_index import authority_id, build_catalog_dataset
 from pipeline.corrected_pdf import regenerate
 from pipeline.fixity import audit_item
 from pipeline.manifest import main as manifest_main
@@ -16,6 +17,47 @@ from pipeline.publish import publishable
 
 
 class CatalogTests(unittest.TestCase):
+    def test_archive_dataset_cross_references_every_author_and_publisher(self):
+        records = [
+            {
+                "id": "book-1", "title": "Book One", "creator": "Author One",
+                "creators": [{"name": "Author One", "role": "author"}, {"name": "Author Two", "role": "editor"}],
+                "publisher": "Press One", "collection_id": "set-1", "series_title": "The Set", "pages": 12,
+            },
+            {"id": "book-2", "title": "Book Two", "creator": "Author One", "publisher": "Press One", "pages": 8},
+        ]
+        dataset = build_catalog_dataset(records)
+        self.assertEqual(dataset["summary"], {
+            "items": 2, "pages": 20, "authors": 2, "publishers": 1, "collections": 1,
+            "languages": {}, "types": {},
+        })
+        self.assertEqual(dataset["authorities"]["authors"][0]["work_count"], 2)
+        self.assertEqual(dataset["authorities"]["publishers"][0]["item_ids"], ["book-1", "book-2"])
+        self.assertEqual(dataset["records"][0]["authorities"]["publisher"]["name"], "Press One")
+        self.assertEqual(dataset["records"][0]["links"]["catalog"], "/item/book-1")
+
+    def test_authority_ids_are_stable_and_script_safe(self):
+        self.assertEqual(authority_id("author", "  فردوسی  "), authority_id("author", "فردوسی"))
+        self.assertEqual(authority_id("publisher", "کتاب‌سرا"), authority_id("publisher", "کتاب سرا"))
+        self.assertTrue(authority_id("publisher", "انتشارات مثال").startswith("publisher-انتشارات-مثال-"))
+
+    def test_archive_and_authority_pages_respect_catalog_visibility(self):
+        with tempfile.TemporaryDirectory() as directory:
+            items = Path(directory)
+            for item_id, creator, public in (("visible", "Shared Author", True), ("hidden", "Shared Author", False)):
+                item = items / item_id
+                item.mkdir()
+                metadata = {"id": item_id, "title": item_id, "creator": creator, "publisher": "Shared Press", "rights": "unknown"}
+                if public:
+                    metadata.update({"rights": "public-domain", "rights_basis": "review", "rights_reviewed_at": "now"})
+                (item / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+            with patch.object(app_module, "ITEMS_DIR", items), patch.object(app_module, "SEARCH_VISIBILITY", "public"):
+                archive = catalog_archive()
+                author = catalog_authority("author", authority_id("author", "Shared Author"))
+            self.assertEqual(archive["summary"]["items"], 1)
+            self.assertEqual(author["work_count"], 1)
+            self.assertEqual(author["items"][0]["id"], "visible")
+
     def test_v3_requires_documented_public_domain_review(self):
         self.assertFalse(upgraded_metadata({"rights": "public-domain"})["public"])
         value = upgraded_metadata({
@@ -68,6 +110,22 @@ class CatalogTests(unittest.TestCase):
                 with self.assertRaises(app_module.HTTPException) as raised:
                     app_module.public_item_path("hidden")
             self.assertEqual(raised.exception.status_code, 404)
+
+    def test_newspaper_catalog_keeps_issue_fields_and_publication_facets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            items = Path(directory)
+            records = [
+                {"id": "issue", "title": "کیهان — 18 بهمن 1357", "type": "newspaper", "series_title": "کیهان", "collection_id": "newspaper-kayhan", "issue_number": "10632"},
+                {"id": "book", "title": "Book", "type": "book", "series_title": "Books", "collection_id": "books"},
+            ]
+            for record in records:
+                path = items / record["id"]
+                path.mkdir()
+                (path / "metadata.json").write_text(json.dumps(record), encoding="utf-8")
+            with patch.object(app_module, "ITEMS_DIR", items), patch.object(app_module, "SEARCH_VISIBILITY", "all"):
+                result = catalog_items(item_type="newspaper")
+            self.assertEqual(result["items"][0]["issue_number"], "10632")
+            self.assertEqual(result["facets"]["collection"], [{"value": "newspaper-kayhan", "count": 1, "label": "کیهان"}])
 
     def test_word_corrections_are_versioned_without_touching_source_alto(self):
         alto = '''<?xml version="1.0"?><alto xmlns="http://www.loc.gov/standards/alto/ns-v3#"><Layout><Page><PrintSpace><TextBlock><TextLine><String ID="string_1" HPOS="1" VPOS="2" WIDTH="3" HEIGHT="4" WC="0.5" CONTENT="کتب"/></TextLine></TextBlock></PrintSpace></Page></Layout></alto>'''

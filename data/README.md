@@ -3,6 +3,10 @@
 Every item is one folder under `data/items/`. Services may change; this
 standards-oriented artifact layout is the permanent contract.
 
+For newspapers, an item is one complete issue. A publication run is the set of
+issues sharing `collection_id` and `series_title`; OCR and preservation files
+remain independently addressable at issue and page level.
+
 ```
 data/items/<item-id>/
     metadata.json               descriptive metadata v3
@@ -96,3 +100,14 @@ catalog provider, conflict, and warning for every available field.
 rendering DPI, source and configuration signatures, attempts, output checksums,
 word count, blank-page classification, elapsed time, and mean word confidence
 for every page. These records make selective reprocessing and auditing possible.
+
+## Catalog and authority index
+
+The API derives a complete, non-destructive catalog index from all visible
+`metadata.json` records at `/api/catalog/dataset`. Each record retains its full
+source metadata and gains links plus author and publisher authority objects.
+Authority IDs combine a normalized Unicode name slug with a hash suffix, making
+them stable and collision-resistant across Persian, Arabic, and Latin scripts.
+The source metadata remains authoritative and is never rewritten merely to
+generate an index. Public deployments apply the same rights visibility rule to
+items, authority counts, authority pages, and the downloadable dataset.

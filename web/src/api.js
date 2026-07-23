@@ -8,6 +8,10 @@ function serviceUrl(path) {
   return `${SERVICE_URL}${path}`;
 }
 
+export function catalogDatasetUrl(path = "/api/catalog/dataset") {
+  return serviceUrl(path);
+}
+
 export async function searchPages(query, options = {}) {
   const params = new URLSearchParams({ q: query });
   Object.entries({ rows: 10, start: 0, ...options }).forEach(([key, value]) => {
@@ -37,6 +41,19 @@ export async function fetchCatalogItem(itemId) {
 export async function fetchCollection(collectionId) {
   const r = await fetch(serviceUrl(`/api/catalog/collections/${encodeURIComponent(collectionId)}`));
   if (!r.ok) throw new Error(`Collection ${r.status}`);
+  return r.json();
+}
+
+export async function fetchArchiveIndex() {
+  const r = await fetch(serviceUrl("/api/catalog/archive"));
+  if (!r.ok) throw new Error(`Archive ${r.status}`);
+  return r.json();
+}
+
+export async function fetchAuthority(kind, authorityId) {
+  if (!new Set(["authors", "publishers"]).has(kind)) throw new Error("Unknown authority type");
+  const r = await fetch(serviceUrl(`/api/catalog/${kind}/${encodeURIComponent(authorityId)}`));
+  if (!r.ok) throw new Error(`${kind === "authors" ? "Author" : "Publisher"} ${r.status}`);
   return r.json();
 }
 

@@ -133,6 +133,8 @@ export default function ItemPage() {
   if (error) return <main className="reader"><p className="error">Could not load item: {error}</p></main>;
   if (!manifest) return <main className="reader"><p>{t("loading")}</p></main>;
   const title = manifest.label?.none?.[0] || itemId;
+  const manifestType = manifest.metadata?.find((entry) => entry.label?.en?.[0] === "Type")?.value?.none?.[0];
+  const isNewspaper = manifestType === "newspaper";
   const searchablePdf = manifest.rendering?.find((item) => item.format === "application/pdf");
   const pageStem = pageId(pageNum);
 
@@ -144,8 +146,8 @@ export default function ItemPage() {
       <button className="toggle-text" onClick={() => setShowThumbs(!showThumbs)}>{t("thumbnails")}</button>
       <button className="toggle-text" onClick={() => setShowText(!showText)}>{showText ? t("hideText") : t("showText")}</button>
     </div></div>
-    <div className="reader-tools"><form className="reader-search" onSubmit={(e) => { e.preventDefault(); const next = new URLSearchParams(searchParams); if (find.trim()) next.set("q", find.trim()); else next.delete("q"); setSearchParams(next); }}><input dir="auto" value={find} onChange={(e) => setFind(e.target.value)} placeholder={t("searchWithin")} /><button>{t("search")}</button></form>
-      {matches && <div className="match-navigation"><span>{matches.total} {t("matchesInBook")}</span><button disabled={matchIndex <= 0} onClick={() => go(Number(matches.pages[matchIndex - 1]?.replace("page-", "")))}>{t("previous")}</button><button disabled={!matches.pages.length || matchIndex >= matches.pages.length - 1} onClick={() => go(Number(matches.pages[matchIndex < 0 ? 0 : matchIndex + 1]?.replace("page-", "")))}>{t("next")}</button></div>}
+    <div className="reader-tools"><form className="reader-search" onSubmit={(e) => { e.preventDefault(); const next = new URLSearchParams(searchParams); if (find.trim()) next.set("q", find.trim()); else next.delete("q"); setSearchParams(next); }}><input dir="auto" value={find} onChange={(e) => setFind(e.target.value)} placeholder={t(isNewspaper ? "searchWithinIssue" : "searchWithin")} /><button>{t("search")}</button></form>
+      {matches && <div className="match-navigation"><span>{matches.total} {t(isNewspaper ? "matchesInIssue" : "matchesInBook")}</span><button disabled={matchIndex <= 0} onClick={() => go(Number(matches.pages[matchIndex - 1]?.replace("page-", "")))}>{t("previous")}</button><button disabled={!matches.pages.length || matchIndex >= matches.pages.length - 1} onClick={() => go(Number(matches.pages[matchIndex < 0 ? 0 : matchIndex + 1]?.replace("page-", "")))}>{t("next")}</button></div>}
       <div className="reader-downloads"><button onClick={copyCitation}>{copied ? t("citationCopied") : t("copyCitation")}</button>{searchablePdf && <a href={searchablePdf.id}>{t("searchablePdf")}</a>}<a href={`/api/catalog/items/${itemId}/ocr/${pageStem}?format=text`}>{t("plainText")}</a><a href={`/api/catalog/items/${itemId}/ocr/${pageStem}?format=alto`}>{t("alto")}</a><a href={`/data/items/${itemId}/iiif/manifest.json`}>{t("iiif")}</a></div>
     </div>
     <div className={`reader-body ${showText ? "with-text" : ""} ${showThumbs ? "with-thumbs" : ""}`}>

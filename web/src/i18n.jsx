@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 const messages = {
   en: {
-    library: "Middle East Digital Library", home: "Home", browse: "Browse", newspapers: "Newspapers", search: "Search",
+    library: "Middle East Digital Library", home: "Home", browse: "Browse", index: "Index", newspapers: "Newspapers", search: "Search",
     searchPlaceholder: "Search books, people, subjects, and full text", explore: "Explore the library",
     hero: "Read, search, and discover digitized Arabic and Persian books and newspapers.", recentlyAdded: "Recently added",
     featuredCollections: "Collections", viewAll: "View all", noItems: "No items found.", loading: "Loading…",
@@ -26,9 +26,13 @@ const messages = {
     publications: "Publications", allPublications: "All publications", issues: "issues", issue: "Issue",
     issueNumber: "Issue number", noIssues: "No newspaper issues matched these filters.",
     searchWithinIssue: "Search within this issue", relatedIssues: "More issues from this publication",
+    matchesInIssue: "matches in this issue",
+    researchIndex: "Research index", archiveIndex: "Archive index", archiveIntro: "A complete, cross-referenced index of the collection for research, citation, and future publication.",
+    authors: "Authors", publishers: "Publishers", collections: "Collections", authorIndex: "Author index", publisherIndex: "Publisher index",
+    filterAuthors: "Filter authors", filterPublishers: "Filter publishers", downloadDataset: "Download full dataset (JSON)",
   },
   fa: {
-    library: "کتابخانهٔ دیجیتال خاورمیانه", home: "خانه", browse: "مرور آثار", newspapers: "روزنامه‌ها", search: "جستجو",
+    library: "کتابخانهٔ دیجیتال خاورمیانه", home: "خانه", browse: "مرور آثار", index: "نمایه", newspapers: "روزنامه‌ها", search: "جستجو",
     searchPlaceholder: "جستجو در کتاب‌ها، نام‌ها، موضوع‌ها و متن کامل", explore: "کتابخانه را کاوش کنید",
     hero: "کتاب‌ها و روزنامه‌های دیجیتال فارسی و عربی را بخوانید، جستجو کنید و بیابید.", recentlyAdded: "تازه‌های کتابخانه",
     featuredCollections: "مجموعه‌ها", viewAll: "مشاهدهٔ همه", noItems: "اثری یافت نشد.", loading: "در حال بارگذاری…",
@@ -52,6 +56,10 @@ const messages = {
     publications: "نشریه‌ها", allPublications: "همهٔ نشریه‌ها", issues: "شماره", issue: "شماره",
     issueNumber: "شمارهٔ نشریه", noIssues: "شماره‌ای مطابق این فیلترها یافت نشد.",
     searchWithinIssue: "جستجو در این شماره", relatedIssues: "شماره‌های دیگر این نشریه",
+    matchesInIssue: "نتیجه در این شماره",
+    researchIndex: "نمایهٔ پژوهشی", archiveIndex: "نمایهٔ آرشیو", archiveIntro: "نمایهٔ کامل و پیوندی مجموعه برای پژوهش، استناد و انتشار آینده.",
+    authors: "پدیدآوران", publishers: "ناشران", collections: "مجموعه‌ها", authorIndex: "نمایهٔ پدیدآور", publisherIndex: "نمایهٔ ناشر",
+    filterAuthors: "پالایش پدیدآوران", filterPublishers: "پالایش ناشران", downloadDataset: "دریافت کل داده‌ها (JSON)",
   },
 };
 

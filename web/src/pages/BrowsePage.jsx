@@ -4,7 +4,7 @@ import CatalogCard from "../components/CatalogCard.jsx";
 import { fetchCatalogItems } from "../api.js";
 import { useI18n } from "../i18n.jsx";
 
-const FILTERS = [["language", "language"], ["item_type", "type"], ["collection", "collection"], ["creator", "creator"], ["subject", "subject"]];
+const FILTERS = [["language", "language"], ["item_type", "type"], ["collection", "collection"], ["creator", "creator"], ["publisher", "publisher"], ["subject", "subject"]];
 
 export default function BrowsePage() {
   const { t } = useI18n();

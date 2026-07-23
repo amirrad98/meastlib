@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import sys
 import uuid
@@ -18,6 +19,10 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "items"
 IMAGE_EXTS = {".tif", ".tiff", ".jpg", ".jpeg", ".png", ".jp2"}
 ACCESS_MAX_DIM = 2400
 ACCESS_QUALITY = 88
+PERSIAN_MONTH_LABELS = {
+    1: "فروردین", 2: "اردیبهشت", 3: "خرداد", 4: "تیر", 5: "مرداد", 6: "شهریور",
+    7: "مهر", 8: "آبان", 9: "آذر", 10: "دی", 11: "بهمن", 12: "اسفند",
+}
 
 
 def sha256(path: Path) -> str:
@@ -73,6 +78,15 @@ def ingest_images(src: Path, item: Path) -> int:
 
 
 def default_metadata(args: argparse.Namespace) -> dict[str, Any]:
+    date_display = args.pub_date
+    date_calendar = ""
+    if args.type == "newspaper":
+        match = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", args.pub_date)
+        if match and int(match.group(2)) in PERSIAN_MONTH_LABELS:
+            date_display = f"{int(match.group(3))} {PERSIAN_MONTH_LABELS[int(match.group(2))]} {match.group(1)}"
+            date_calendar = "solar-hijri"
+    identifiers = ([{"scheme": "issue-number", "value": args.issue_number, "scope": "issue"}]
+                   if args.issue_number else [])
     return {
         "schema_version": 3,
         "id": args.id,
@@ -85,15 +99,15 @@ def default_metadata(args: argparse.Namespace) -> dict[str, Any]:
         "publisher": "",
         "place_published": "",
         "date_published": args.pub_date,
-        "date_display": args.pub_date,
-        "date_calendar": "",
+        "date_display": date_display,
+        "date_calendar": date_calendar,
         "edition": "",
         "series_title": "",
         "collection_id": "",
         "volume_number": None,
         "volume_label": "",
         "issue_number": args.issue_number,
-        "identifiers": [],
+        "identifiers": identifiers,
         "subjects": [],
         "temporal_coverage": [],
         "language": args.lang,

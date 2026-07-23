@@ -120,14 +120,37 @@ has no authentication in this local version, so do not expose `/admin` or
 The local site now includes an English/Persian public interface:
 
 - `/` presents recently added books and featured multi-volume collections;
-- `/browse` filters catalog records by language, type, collection, creator, and subject;
+- `/browse` filters catalog records by language, type, collection, creator, publisher, and subject;
+- `/archive` is a research-grade, collection-wide index of authors, publishers, collections, works, and pages;
+- `/authors/<authority-id>` and `/publishers/<authority-id>` cross-reference every visible work associated with that authority;
 - `/search` groups full-text page hits by work, preserves searches in the URL, and exposes facets;
 - `/item/<id>` is a catalog record, while `/item/<id>/<page>` is the scan reader;
+- `/newspapers` groups issue records by publication and filters them by issue number or Solar Hijri date;
 - search links retain OCR coordinates so the reader can zoom to and highlight the matching words;
 - the reader includes in-book search, matching-page navigation, a windowed thumbnail strip, page jump,
   citations, OCR text, ALTO, IIIF, and searchable-PDF links.
 
 The language switch changes public navigation between English and Persian. Administration remains English.
+
+The archive page also exposes `/api/catalog/dataset`, a downloadable JSON catalog containing the complete
+visible metadata record for every item, stable author and publisher authority IDs, item membership lists,
+and navigable catalog, reader, IIIF, metadata, and collection links. The local portal includes the full local
+catalog; the public portal automatically contains only rights-reviewed public-domain records.
+
+### Newspaper issues
+
+Store one newspaper issue per PDF/item. Related issues share `series_title` (the publication name) and
+`collection_id`; each issue has its own `issue_number`, normalized sortable date, immutable source PDF,
+page images, ALTO/text OCR, searchable PDF, and IIIF manifest. Filenames in this form are recognized
+automatically:
+
+```text
+1357-بهمن-18__Kayhan_(10632)__226603.pdf
+```
+
+This becomes publication `کیهان`, issue `10632`, Solar Hijri date `1357-11-18`, and permanent ID
+`kayhan-1357-11-18-10632`. Newspaper OCR keeps Tesseract's automatic layout analysis and uses a
+column-preserving fallback for low-confidence pages.
 
 ### Metadata review, OCR correction, and fixity
 
@@ -147,7 +170,7 @@ leaving the original OCR untouched. Run a checksum audit from the dashboard or c
 python pipeline/fixity.py data/items --json data/admin/fixity.json
 ```
 
-The current Solr schema remains usable without rebuilding. To enable the new creator/subject facets and true
+The current Solr schema remains usable without rebuilding. To enable the new creator/publisher/subject facets and true
 title/date sorting on an existing disposable Solr index, recreate its Docker volume and reindex derived data:
 
 ```bash

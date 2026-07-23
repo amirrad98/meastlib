@@ -14,6 +14,7 @@
   <field name="creators" type="text_general" indexed="true" stored="true" multiValued="true"/>
   <field name="contributors" type="text_general" indexed="true" stored="true" multiValued="true"/>
   <field name="publisher" type="text_general" indexed="true" stored="true"/>
+  <field name="publisher_facet" type="string" indexed="true" stored="true"/>
   <field name="place_published" type="text_general" indexed="true" stored="true"/>
   <field name="date_published" type="string" indexed="true" stored="true"/>
   <field name="date_sort" type="string" indexed="true" stored="true"/>
